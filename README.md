@@ -92,7 +92,7 @@ The gateway runs two replicas with a PodDisruptionBudget even on one node, so a 
 - The Developer Portal is not needed and is disabled.
 - `GET /ping` means only GET. Other methods get 404 from the gateway.
 - Docker runs as root (Docker Desktop or the standard Linux daemon). Rootless Docker cannot bind port 443.
-- Built and tested on macOS. Linux is covered by using POSIX `sh`, `openssl` for base64 and no GNU-only flags, but it was not run on a Linux machine.
+- Tested on macOS (Docker Desktop) and on Linux: Ubuntu 24.04 with `dash` as `/bin/sh` and the same tool versions, run in a container with host networking against the same Docker engine. A separate Linux host was not available.
 
 ## Monitoring: what I would watch
 
