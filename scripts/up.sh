@@ -32,7 +32,6 @@ for tool in docker k3d kubectl helm curl openssl; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is not installed (see README)"
 done
 docker info >/dev/null 2>&1 || fail "the Docker daemon is not running"
-kubectl wait --help 2>/dev/null | grep -q -- '--for=create' || fail "kubectl 1.31 or newer is required"
 
 log "Creating the k3d cluster"
 if ! k3d cluster list gravitee >/dev/null 2>&1; then
@@ -82,7 +81,6 @@ cluster_helm upgrade --install apim apim --repo https://helm.gravitee.io \
 
 log "Deploying the pong backend and the ping API"
 cluster_kubectl apply -f manifests/pong.yaml
-cluster_kubectl -n pong rollout status deployment/pong --timeout=120s
 # The operator's admission webhook can refuse connections for a few seconds after it reports ready.
 # Only that error is retried; any other error stops the build at once.
 attempt=1

@@ -2,8 +2,6 @@ apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: gravitee
-servers: 1
-agents: 0
 image: rancher/k3s:v1.35.5-k3s1
 kubeAPI:
   hostIP: 127.0.0.1

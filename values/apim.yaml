@@ -3,8 +3,6 @@ es:
   enabled: false
 portal:
   enabled: false
-alerts:
-  enabled: false
 
 # The chart ships sample users and a public token signing key. The key comes from Secret apim-jwt-secret (env below).
 extraInMemoryUsers: ""
@@ -19,14 +17,12 @@ notifiers:
 
 mongo:
   dbhost: mongodb.gravitee.svc
-  dbname: gravitee
   rsEnabled: false
   # MongoDB requires auth; the URI with the password comes from Secret mongodb-uri (env below).
   auth:
     enabled: false
 
 api:
-  replicaCount: 1
   image:
     tag: 4.12.23
     pullPolicy: IfNotPresent
@@ -58,8 +54,6 @@ api:
     enabled: false
   deployment:
     securityContext:
-      runAsUser: 1001
-      runAsNonRoot: true
       allowPrivilegeEscalation: false
       capabilities:
         drop:
@@ -79,12 +73,8 @@ api:
   ingress:
     management:
       ingressClassName: traefik
-      scheme: https
-      path: /management
-      pathType: Prefix
       hosts:
         - localhost
-      annotations: {}
       tls:
         - hosts:
             - localhost
@@ -123,8 +113,6 @@ gateway:
     enabled: false
   deployment:
     securityContext:
-      runAsUser: 1001
-      runAsNonRoot: true
       allowPrivilegeEscalation: false
       capabilities:
         drop:
@@ -149,21 +137,15 @@ gateway:
         externalPort: 18082
   ingress:
     ingressClassName: traefik
-    scheme: https
-    path: /
-    pathType: Prefix
     hosts:
       - localhost
-    annotations: {}
     tls:
       - hosts:
           - localhost
         secretName: localhost-tls
 
 ui:
-  replicaCount: 1
   image:
-    tag: 4.12.23
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -176,25 +158,20 @@ ui:
     enabled: false
   deployment:
     securityContext:
-      runAsUser: 101
-      runAsNonRoot: true
       allowPrivilegeEscalation: false
       capabilities:
         drop:
           - ALL
       seccompProfile:
         type: RuntimeDefault
-      runAsGroup: 101
   ingress:
     ingressClassName: traefik
-    scheme: https
     path: /console
     pathType: Prefix
     hosts:
       - localhost
     annotations:
-      # The chart defaults target ingress-nginx; null removes them.
-      kubernetes.io/ingress.class: null
+      # The chart default targets ingress-nginx; null removes it.
       nginx.ingress.kubernetes.io/rewrite-target: null
       traefik.ingress.kubernetes.io/router.middlewares: gravitee-strip-console@kubernetescrd
     tls:

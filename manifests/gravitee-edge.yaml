@@ -10,12 +10,9 @@ spec:
   renewBefore: 8h
   dnsNames:
     - localhost
-  ipAddresses:
-    - 127.0.0.1
   privateKey:
     algorithm: ECDSA
     size: 256
-    rotationPolicy: Always
   issuerRef:
     name: local-ca
     kind: ClusterIssuer
