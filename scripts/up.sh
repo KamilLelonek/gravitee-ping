@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 CONTEXT=k3d-gravitee
 CERT_MANAGER_VERSION=v1.21.2
 MONGODB_CHART_VERSION=0.20.0
+GKO_VERSION=4.12.22
 
 # Keep Helm repositories inside the project so the user's Helm setup is neither read nor changed.
 export HELM_REPOSITORY_CONFIG="$PWD/.helm/repositories.yaml"
@@ -57,4 +58,11 @@ log "Installing MongoDB"
 cluster_helm upgrade --install mongodb oci://registry-1.docker.io/cloudpirates/mongodb \
   --version "$MONGODB_CHART_VERSION" --namespace gravitee \
   --values values/mongodb.yaml --wait --timeout 5m
+
+log "Installing the Gravitee Kubernetes Operator"
+cluster_helm upgrade --install gko gko --repo https://helm.gravitee.io \
+  --version "$GKO_VERSION" --namespace gravitee --wait --timeout 5m
+# The operator creates its CRDs when it starts, so they may not exist yet.
+cluster_kubectl wait --for=create --for=condition=established --timeout=120s \
+  crd/managementcontexts.gravitee.io crd/apiv4definitions.gravitee.io
 
