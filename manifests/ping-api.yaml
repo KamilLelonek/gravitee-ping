@@ -1,0 +1,79 @@
+# Chart default Management API admin, used by the operator. Change before production (see README).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: apim-admin-credentials
+  namespace: gravitee
+type: Opaque
+stringData:
+  username: admin
+  password: admin
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ManagementContext
+metadata:
+  name: apim
+  namespace: gravitee
+spec:
+  baseUrl: http://apim-api.gravitee.svc:83
+  environmentId: DEFAULT
+  organizationId: DEFAULT
+  auth:
+    secretRef:
+      name: apim-admin-credentials
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: ping
+  namespace: gravitee
+spec:
+  name: ping
+  description: Proxies GET /ping to the pong backend
+  version: "1.0"
+  contextRef:
+    name: apim
+    namespace: gravitee
+  definitionContext:
+    origin: KUBERNETES
+    syncFrom: MANAGEMENT
+  type: PROXY
+  state: STARTED
+  lifecycleState: PUBLISHED
+  visibility: PUBLIC
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /ping
+      entrypoints:
+        - type: http-proxy
+          qos: AUTO
+  endpointGroups:
+    - name: pong-backend
+      type: http-proxy
+      endpoints:
+        - name: pong
+          type: http-proxy
+          inheritConfiguration: false
+          secondary: false
+          configuration:
+            target: http://pong.pong.svc.cluster.local:8080/ping
+  # Only GET matches a flow; any other method gets 404 from the gateway.
+  flowExecution:
+    mode: DEFAULT
+    matchRequired: true
+  flows:
+    - name: GET only
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+          methods:
+            - GET
+  plans:
+    KeyLess:
+      name: Keyless
+      description: Open access, no API key
+      security:
+        type: KEY_LESS

@@ -73,3 +73,34 @@ cluster_helm upgrade --install apim apim --repo https://helm.gravitee.io \
   --version "$APIM_VERSION" --namespace gravitee \
   --values values/apim.yaml --wait --timeout 10m
 
+log "Deploying the pong backend and the ping API"
+cluster_kubectl apply -f manifests/pong.yaml
+cluster_kubectl -n pong rollout status deployment/pong --timeout=120s
+# The operator's admission webhook can refuse connections for a few seconds after it reports ready.
+attempt=1
+until cluster_kubectl apply -f manifests/ping-api.yaml; do
+  [ "$attempt" -lt 10 ] || fail "the operator webhook did not accept manifests/ping-api.yaml"
+  attempt=$((attempt + 1))
+  sleep 5
+done
+if ! cluster_kubectl -n gravitee wait --for=jsonpath='{.status.processingStatus}'=Completed \
+  apiv4definition/ping --timeout=300s; then
+  cluster_kubectl -n gravitee get apiv4definition ping \
+    -o jsonpath='{.status.conditions[?(@.type=="Accepted")].message}{"\n"}' >&2
+  fail "the operator did not publish the ping API"
+fi
+cluster_kubectl -n gravitee wait --for=condition=Ready certificate/localhost-tls --timeout=120s
+
+log "Exporting the local CA to .certs/ca.crt"
+mkdir -p .certs
+cluster_kubectl -n cert-manager get secret local-ca -o jsonpath='{.data.ca\.crt}' \
+  | openssl base64 -d -A > .certs/ca.crt
+
+log "Calling GET https://localhost/ping"
+# The gateway loads a new API on its next sync cycle, a few seconds after the operator reports it.
+attempt=1
+until sh scripts/ping.sh 2>/dev/null; do
+  [ "$attempt" -lt 12 ] || { sh scripts/ping.sh; exit 1; }
+  attempt=$((attempt + 1))
+  sleep 5
+done
