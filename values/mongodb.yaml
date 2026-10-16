@@ -1,0 +1,19 @@
+# Gravitee 4.12 is tested against MongoDB 4.4 to 8.0; the chart default (9.x) is not.
+image:
+  tag: "8.0.34"
+  pullPolicy: IfNotPresent
+auth:
+  enabled: true
+  rootUsername: admin
+  existingSecret: mongodb-credentials
+  existingSecretPasswordKey: password
+persistence:
+  enabled: true
+  size: 1Gi
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi

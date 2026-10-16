@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 CONTEXT=k3d-gravitee
 CERT_MANAGER_VERSION=v1.21.2
+MONGODB_CHART_VERSION=0.20.0
 
 # Keep Helm repositories inside the project so the user's Helm setup is neither read nor changed.
 export HELM_REPOSITORY_CONFIG="$PWD/.helm/repositories.yaml"
@@ -38,4 +39,22 @@ cluster_helm upgrade --install cert-manager cert-manager --repo https://charts.j
   --values values/cert-manager.yaml --wait --timeout 5m
 cluster_kubectl apply -f manifests/cluster-issuer.yaml
 cluster_kubectl wait --for=condition=Ready clusterissuer/local-ca --timeout=120s
+
+log "Creating MongoDB credentials (generated on the first run only)"
+cluster_kubectl create namespace gravitee --dry-run=client -o yaml | cluster_kubectl apply -f -
+if ! cluster_kubectl -n gravitee get secret mongodb-credentials >/dev/null 2>&1; then
+  # Hex keeps the password URI-safe. Piped through stdin, it never appears in a process list.
+  openssl rand -hex 24 | tr -d '\n' \
+    | cluster_kubectl -n gravitee create secret generic mongodb-credentials --from-file=password=/dev/stdin
+fi
+password=$(cluster_kubectl -n gravitee get secret mongodb-credentials -o jsonpath='{.data.password}' | openssl base64 -d -A)
+printf 'mongodb://admin:%s@mongodb.gravitee.svc:27017/gravitee?authSource=admin' "$password" \
+  | cluster_kubectl -n gravitee create secret generic mongodb-uri --from-file=uri=/dev/stdin --dry-run=client -o yaml \
+  | cluster_kubectl apply -f -
+unset password
+
+log "Installing MongoDB"
+cluster_helm upgrade --install mongodb oci://registry-1.docker.io/cloudpirates/mongodb \
+  --version "$MONGODB_CHART_VERSION" --namespace gravitee \
+  --values values/mongodb.yaml --wait --timeout 5m
 
