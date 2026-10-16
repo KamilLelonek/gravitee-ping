@@ -92,6 +92,15 @@ gateway:
   reporters:
     elasticsearch:
       enabled: false
+  services:
+    metrics:
+      enabled: true
+      prometheus:
+        enabled: true
+    core:
+      service:
+        enabled: true
+        externalPort: 18082
   ingress:
     ingressClassName: traefik
     scheme: https
