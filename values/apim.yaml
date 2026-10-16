@@ -53,7 +53,7 @@ api:
   autoscaling:
     enabled: false
   deployment:
-    securityContext:
+    securityContext: &securityContext
       allowPrivilegeEscalation: false
       capabilities:
         drop:
@@ -112,13 +112,7 @@ gateway:
   autoscaling:
     enabled: false
   deployment:
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-          - ALL
-      seccompProfile:
-        type: RuntimeDefault
+    securityContext: *securityContext
   pdb:
     enabled: true
     minAvailable: 1
@@ -157,13 +151,7 @@ ui:
   autoscaling:
     enabled: false
   deployment:
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-          - ALL
-      seccompProfile:
-        type: RuntimeDefault
+    securityContext: *securityContext
   ingress:
     ingressClassName: traefik
     path: /console

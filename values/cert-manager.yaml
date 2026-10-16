@@ -1,6 +1,6 @@
 crds:
   enabled: true
-resources:
+resources: &resources
   requests:
     cpu: 10m
     memory: 32Mi
@@ -8,18 +8,6 @@ resources:
     cpu: 100m
     memory: 128Mi
 webhook:
-  resources:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 100m
-      memory: 128Mi
+  resources: *resources
 cainjector:
-  resources:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 100m
-      memory: 128Mi
+  resources: *resources
