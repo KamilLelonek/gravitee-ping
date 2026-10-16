@@ -20,6 +20,8 @@ spec:
   privateKey:
     algorithm: ECDSA
     size: 256
+    # Keep the CA key on renewal, so an exported ca.crt stays valid.
+    rotationPolicy: Never
   issuerRef:
     name: selfsigned
     kind: ClusterIssuer

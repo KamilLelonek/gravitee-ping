@@ -6,6 +6,17 @@ portal:
 alerts:
   enabled: false
 
+# The chart ships sample users and a public token signing key. The key comes from Secret apim-jwt-secret (env below).
+extraInMemoryUsers: ""
+jwtSecret: ""
+
+# No SMTP server in this setup.
+smtp:
+  enabled: false
+notifiers:
+  smtp:
+    enabled: false
+
 mongo:
   dbhost: mongodb.gravitee.svc
   dbname: gravitee
@@ -27,6 +38,11 @@ api:
         secretKeyRef:
           name: mongodb-uri
           key: uri
+    - name: gravitee_jwt_secret
+      valueFrom:
+        secretKeyRef:
+          name: apim-jwt-secret
+          key: secret
     - name: GIO_MIN_MEM
       value: 768m
     - name: GIO_MAX_MEM
@@ -40,6 +56,26 @@ api:
       memory: 1536Mi
   autoscaling:
     enabled: false
+  deployment:
+    securityContext:
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    # The chart default only checks the TCP port, which opens before the application is ready.
+    readinessProbe:
+      enabled: false
+    customReadinessProbe:
+      httpGet:
+        path: /management/organizations/DEFAULT/console
+        port: http
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      failureThreshold: 3
   ingress:
     management:
       ingressClassName: traefik
@@ -85,6 +121,16 @@ gateway:
       memory: 1Gi
   autoscaling:
     enabled: false
+  deployment:
+    securityContext:
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
   pdb:
     enabled: true
     minAvailable: 1
@@ -128,6 +174,17 @@ ui:
       memory: 128Mi
   autoscaling:
     enabled: false
+  deployment:
+    securityContext:
+      runAsUser: 101
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+      runAsGroup: 101
   ingress:
     ingressClassName: traefik
     scheme: https

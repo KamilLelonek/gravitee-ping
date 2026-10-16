@@ -61,7 +61,15 @@ A request goes `curl -> Traefik (TLS) -> gateway -> API "/ping" -> pong`.
 
 The API itself is a Kubernetes resource, `manifests/ping-api.yaml`. Its configuration takes this path: the operator reads the `ApiV4Definition` and pushes it to the Management API, the Management API stores it in MongoDB, and every gateway replica picks it up from MongoDB on its sync cycle. The gateway never calls the Management API to serve traffic. If the Management API stops, the gateway keeps serving the APIs it has loaded.
 
-`make up` runs `scripts/up.sh`, which installs in this order: cluster, cert-manager and the local CA, MongoDB, the operator, APIM, the backend, the API. Every step waits for the previous one, and running it again changes nothing.
+`make up` runs `scripts/up.sh`, which installs in this order: cluster, cert-manager and the local CA, MongoDB, the operator, APIM, the backend, the API. Every step waits for the previous one, and running it again changes nothing. On a fresh install the operator pod restarts once: it registers its CRDs at startup and starts watching them a moment before the API server serves them. This is upstream behaviour and the second start is clean.
+
+Security in this setup:
+
+- Generated on the first run and kept only in Secrets: the MongoDB password and the key that signs Console login tokens. Neither is in git, on a command line, or in a ConfigMap.
+- The chart's sample users are removed, so the only remaining defaults are the two admin logins listed under Assumptions.
+- Every pod runs as non-root with all capabilities dropped. NetworkPolicies let only the gateway reach `pong`, and only Gravitee reach MongoDB.
+
+The gateway runs two replicas with a PodDisruptionBudget even on one node, so a rolling update or a pod restart never takes `/ping` down. On a real cluster the same settings spread across nodes.
 
 ## Choices and alternatives
 
@@ -79,7 +87,7 @@ The API itself is a Kubernetes resource, `manifests/ping-api.yaml`. Its configur
 ## Assumptions
 
 - Everything is reached on `localhost`. There is no DNS name.
-- The Community Edition defaults are acceptable for a local demo: admin user `admin/admin` and technical API user `admin/adminadmin`.
+- Two Community Edition default logins stay for a local demo: Console and Management API `admin/admin`, and the gateway technical API `admin/adminadmin`.
 - Analytics are not needed, so Elasticsearch is not installed. The Console's analytics pages stay empty.
 - The Developer Portal is not needed and is disabled.
 - `GET /ping` means only GET. Other methods get 404 from the gateway.
@@ -101,13 +109,14 @@ Per-API numbers and errors such as a lost MongoDB connection are not in these me
 
 ## Before production
 
-1. Replace both default admin credentials and keep secrets in an external manager, for example External Secrets with Vault.
-2. Put the Console and the Management API behind SSO and on an internal entrypoint, separate from public API traffic.
+1. Replace both default admin logins and keep secrets in an external manager, for example External Secrets with Vault.
+2. Put the Console and the Management API behind SSO and on an internal entrypoint, separate from public API traffic. Allow the gateway technical port 18082 only from the monitoring namespace.
 3. Run MongoDB as a replica set with backups and a dedicated application user, or use a managed service.
 4. Use several nodes with pod anti-affinity, and scale the gateway with a HorizontalPodAutoscaler.
 5. Add an analytics reporter (Elasticsearch or OpenSearch), Redis for rate limiting, and a Prometheus and Grafana stack with alerts.
 6. Add CI that runs `helm template` and `kubeconform`, pin images by digest, and write the upgrade and rollback procedure.
-7. Use a real DNS name with an ACME issuer.
+7. Run the Gravitee containers with a read-only root filesystem, which needs writable volumes for their log and temp folders.
+8. Use a real DNS name with an ACME issuer.
 
 ## Left out within the time box
 

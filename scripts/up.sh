@@ -9,14 +9,23 @@ MONGODB_CHART_VERSION=0.20.0
 GKO_VERSION=4.12.22
 APIM_VERSION=4.12.23
 
-# Keep Helm repositories inside the project so the user's Helm setup is neither read nor changed.
-export HELM_REPOSITORY_CONFIG="$PWD/.helm/repositories.yaml"
-export HELM_REPOSITORY_CACHE="$PWD/.helm/cache"
+# Keep all Helm state inside the project so the user's Helm setup is neither read nor changed.
+export HELM_CACHE_HOME="$PWD/.helm/cache"
+export HELM_CONFIG_HOME="$PWD/.helm/config"
+export HELM_DATA_HOME="$PWD/.helm/data"
 
 log() { printf '\n==> %s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 cluster_kubectl() { kubectl --context "$CONTEXT" "$@"; }
 cluster_helm() { helm --kube-context "$CONTEXT" "$@"; }
+
+# Creates a random hex Secret in gravitee on the first run only. Piped through stdin, the value
+# never appears in a process list; hex keeps it safe inside a URI.
+create_random_secret() {
+  cluster_kubectl -n gravitee get secret "$1" >/dev/null 2>&1 && return 0
+  openssl rand -hex 32 | tr -d '\n' \
+    | cluster_kubectl -n gravitee create secret generic "$1" --from-file="$2"=/dev/stdin
+}
 
 log "Checking prerequisites"
 for tool in docker k3d kubectl helm curl openssl; do
@@ -42,13 +51,10 @@ cluster_helm upgrade --install cert-manager cert-manager --repo https://charts.j
 cluster_kubectl apply -f manifests/cluster-issuer.yaml
 cluster_kubectl wait --for=condition=Ready clusterissuer/local-ca --timeout=120s
 
-log "Creating MongoDB credentials (generated on the first run only)"
+log "Creating generated credentials (first run only)"
 cluster_kubectl create namespace gravitee --dry-run=client -o yaml | cluster_kubectl apply -f -
-if ! cluster_kubectl -n gravitee get secret mongodb-credentials >/dev/null 2>&1; then
-  # Hex keeps the password URI-safe. Piped through stdin, it never appears in a process list.
-  openssl rand -hex 24 | tr -d '\n' \
-    | cluster_kubectl -n gravitee create secret generic mongodb-credentials --from-file=password=/dev/stdin
-fi
+create_random_secret mongodb-credentials password
+create_random_secret apim-jwt-secret secret
 password=$(cluster_kubectl -n gravitee get secret mongodb-credentials -o jsonpath='{.data.password}' | openssl base64 -d -A)
 printf 'mongodb://admin:%s@mongodb.gravitee.svc:27017/gravitee?authSource=admin' "$password" \
   | cluster_kubectl -n gravitee create secret generic mongodb-uri --from-file=uri=/dev/stdin --dry-run=client -o yaml \
@@ -59,6 +65,7 @@ log "Installing MongoDB"
 cluster_helm upgrade --install mongodb oci://registry-1.docker.io/cloudpirates/mongodb \
   --version "$MONGODB_CHART_VERSION" --namespace gravitee \
   --values values/mongodb.yaml --wait --timeout 5m
+cluster_kubectl apply -f manifests/mongodb-network-policy.yaml
 
 log "Installing the Gravitee Kubernetes Operator"
 cluster_helm upgrade --install gko gko --repo https://helm.gravitee.io \
@@ -77,12 +84,18 @@ log "Deploying the pong backend and the ping API"
 cluster_kubectl apply -f manifests/pong.yaml
 cluster_kubectl -n pong rollout status deployment/pong --timeout=120s
 # The operator's admission webhook can refuse connections for a few seconds after it reports ready.
+# Only that error is retried; any other error stops the build at once.
 attempt=1
-until cluster_kubectl apply -f manifests/ping-api.yaml; do
-  [ "$attempt" -lt 10 ] || fail "the operator webhook did not accept manifests/ping-api.yaml"
+until output=$(cluster_kubectl apply -f manifests/ping-api.yaml 2>&1); do
+  case "$output" in
+    *"failed calling webhook"*) ;;
+    *) printf '%s\n' "$output" >&2; fail "manifests/ping-api.yaml was rejected" ;;
+  esac
+  [ "$attempt" -lt 10 ] || { printf '%s\n' "$output" >&2; fail "the operator webhook did not answer"; }
   attempt=$((attempt + 1))
   sleep 5
 done
+printf '%s\n' "$output"
 if ! cluster_kubectl -n gravitee wait --for=jsonpath='{.status.processingStatus}'=Completed \
   apiv4definition/ping --timeout=300s; then
   cluster_kubectl -n gravitee get apiv4definition ping \
