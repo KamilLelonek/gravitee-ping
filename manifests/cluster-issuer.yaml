@@ -1,0 +1,33 @@
+# Local certificate authority: a self-signed root that signs every cluster certificate.
+# In production, replace the "local-ca" ClusterIssuer with an ACME issuer (Let's Encrypt).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: local-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: gravitee-ping local CA
+  secretName: local-ca
+  duration: 8760h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: local-ca
+spec:
+  ca:
+    secretName: local-ca

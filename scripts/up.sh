@@ -4,6 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 CONTEXT=k3d-gravitee
+CERT_MANAGER_VERSION=v1.21.2
 
 # Keep Helm repositories inside the project so the user's Helm setup is neither read nor changed.
 export HELM_REPOSITORY_CONFIG="$PWD/.helm/repositories.yaml"
@@ -30,4 +31,11 @@ if ! k3d cluster list gravitee >/dev/null 2>&1; then
 fi
 cluster_kubectl -n kube-system wait --for=create deployment/traefik --timeout=180s
 cluster_kubectl -n kube-system rollout status deployment/traefik --timeout=180s
+
+log "Installing cert-manager and the local certificate authority"
+cluster_helm upgrade --install cert-manager cert-manager --repo https://charts.jetstack.io \
+  --version "$CERT_MANAGER_VERSION" --namespace cert-manager --create-namespace \
+  --values values/cert-manager.yaml --wait --timeout 5m
+cluster_kubectl apply -f manifests/cluster-issuer.yaml
+cluster_kubectl wait --for=condition=Ready clusterissuer/local-ca --timeout=120s
 
