@@ -1,0 +1,14 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: gravitee
+servers: 1
+agents: 0
+image: rancher/k3s:v1.35.5-k3s1
+kubeAPI:
+  hostIP: 127.0.0.1
+ports:
+  # HTTPS only, bound to loopback so the stack is not reachable from the local network.
+  - port: 127.0.0.1:443:443
+    nodeFilters:
+      - loadbalancer
