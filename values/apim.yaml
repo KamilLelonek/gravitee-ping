@@ -75,7 +75,7 @@ api:
       ingressClassName: traefik
       hosts:
         - localhost
-      tls:
+      tls: &tls
         - hosts:
             - localhost
           secretName: localhost-tls
@@ -133,10 +133,7 @@ gateway:
     ingressClassName: traefik
     hosts:
       - localhost
-    tls:
-      - hosts:
-          - localhost
-        secretName: localhost-tls
+    tls: *tls
 
 ui:
   image:
@@ -162,7 +159,4 @@ ui:
       # The chart default targets ingress-nginx; null removes it.
       nginx.ingress.kubernetes.io/rewrite-target: null
       traefik.ingress.kubernetes.io/router.middlewares: gravitee-strip-console@kubernetescrd
-    tls:
-      - hosts:
-          - localhost
-        secretName: localhost-tls
+    tls: *tls

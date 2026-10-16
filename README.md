@@ -19,6 +19,7 @@ Port 443 on 127.0.0.1 must be free. The first run pulls about 2 GB of images. Me
 ```sh
 make up       # about 4 to 5 minutes the first time, under 30 seconds after that
 make ping     # fails unless GET /ping returns exactly "pong"
+make test     # about 35 s: re-run is a no-op, GET only, TLS ready, NetworkPolicies hold
 make status   # pods, API status, certificate status
 make down     # deletes the cluster
 ```
@@ -59,7 +60,7 @@ host (macOS / Linux)       curl --cacert .certs/ca.crt https://localhost/ping   
 
 A request goes `curl -> Traefik (TLS) -> gateway -> API "/ping" -> pong`.
 
-The API itself is a Kubernetes resource, `manifests/ping-api.yaml`. Its configuration takes this path: the operator reads the `ApiV4Definition` and pushes it to the Management API, the Management API stores it in MongoDB, and every gateway replica picks it up from MongoDB on its sync cycle. The gateway never calls the Management API to serve traffic. If the Management API stops, the gateway keeps serving the APIs it has loaded.
+The API itself is a Kubernetes resource, `manifests/ping-api.yaml`. Its configuration takes this path: the operator reads the `ApiV4Definition` and pushes it to the Management API, the Management API stores it in MongoDB, and every gateway replica picks it up from MongoDB on its sync cycle. The gateway never calls the Management API to serve traffic. If the Management API stops, the gateway keeps serving the APIs it has loaded. A changed API reaches the gateways on their next sync, a few seconds after `make up` returns.
 
 `make up` runs `scripts/up.sh`, which installs in this order: cluster, cert-manager and the local CA, MongoDB, the operator, APIM, the backend, the API. Every step waits for the previous one, and running it again changes nothing. On a fresh install the operator pod restarts once: it registers its CRDs at startup and starts watching them a moment before the API server serves them. This is upstream behaviour and the second start is clean.
 
@@ -117,6 +118,7 @@ Per-API numbers and errors such as a lost MongoDB connection are not in these me
 6. Add CI that runs `helm template` and `kubeconform`, pin images by digest, and write the upgrade and rollback procedure.
 7. Run the Gravitee containers with a read-only root filesystem, which needs writable volumes for their log and temp folders.
 8. Use a real DNS name with an ACME issuer.
+9. Deploy through a GitOps controller (Flux or Argo CD) instead of re-running `helm upgrade`, which records a new Helm revision on every run even when nothing changes.
 
 ## Left out within the time box
 

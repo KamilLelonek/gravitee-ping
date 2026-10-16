@@ -2,8 +2,9 @@
 # Builds the whole stack. Safe to re-run: every step converges to the same state.
 set -eu
 cd "$(dirname "$0")/.."
+# shellcheck source=scripts/common.sh
+. scripts/common.sh
 
-CONTEXT=k3d-gravitee
 CERT_MANAGER_VERSION=v1.21.2
 MONGODB_CHART_VERSION=0.20.0
 GKO_VERSION=4.12.22
@@ -13,11 +14,6 @@ APIM_VERSION=4.12.23
 export HELM_CACHE_HOME="$PWD/.helm/cache"
 export HELM_CONFIG_HOME="$PWD/.helm/config"
 export HELM_DATA_HOME="$PWD/.helm/data"
-
-log() { printf '\n==> %s\n' "$*"; }
-fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
-cluster_kubectl() { kubectl --context "$CONTEXT" "$@"; }
-cluster_helm() { helm --kube-context "$CONTEXT" "$@"; }
 
 # Creates a random hex Secret in gravitee on the first run only. Piped through stdin, the value
 # never appears in a process list; hex keeps it safe inside a URI.

@@ -1,4 +1,4 @@
-.PHONY: up down ping status
+.PHONY: up down ping test status
 
 # Build the cluster and everything on it, then call /ping.
 up:
@@ -7,6 +7,10 @@ up:
 # Call GET /ping through the gateway; fails unless the body is exactly "pong".
 ping:
 	sh scripts/ping.sh
+
+# Check the README's claims: re-run is a no-op, GET only, TLS, NetworkPolicies.
+test:
+	sh scripts/test.sh
 
 # Show pods, the API status and the certificate.
 status:
