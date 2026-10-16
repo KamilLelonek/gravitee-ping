@@ -1,0 +1,137 @@
+# Analytics (Elasticsearch) and the Developer Portal are out of scope; see README.
+es:
+  enabled: false
+portal:
+  enabled: false
+alerts:
+  enabled: false
+
+mongo:
+  dbhost: mongodb.gravitee.svc
+  dbname: gravitee
+  rsEnabled: false
+  # MongoDB requires auth; the URI with the password comes from Secret mongodb-uri (env below).
+  auth:
+    enabled: false
+
+api:
+  replicaCount: 1
+  image:
+    tag: 4.12.23
+    pullPolicy: IfNotPresent
+  analytics:
+    type: none
+  env:
+    - name: gravitee_management_mongodb_uri
+      valueFrom:
+        secretKeyRef:
+          name: mongodb-uri
+          key: uri
+    - name: GIO_MIN_MEM
+      value: 768m
+    - name: GIO_MAX_MEM
+      value: 768m
+  resources:
+    requests:
+      cpu: 500m
+      memory: 768Mi
+    limits:
+      cpu: "1"
+      memory: 1536Mi
+  autoscaling:
+    enabled: false
+  ingress:
+    management:
+      ingressClassName: traefik
+      scheme: https
+      path: /management
+      pathType: Prefix
+      hosts:
+        - localhost
+      annotations: {}
+      tls:
+        - hosts:
+            - localhost
+          secretName: localhost-tls
+    portal:
+      enabled: false
+
+gateway:
+  replicaCount: 2
+  image:
+    tag: 4.12.23
+    pullPolicy: IfNotPresent
+  env:
+    - name: gravitee_management_mongodb_uri
+      valueFrom:
+        secretKeyRef:
+          name: mongodb-uri
+          key: uri
+    - name: gravitee_ratelimit_mongodb_uri
+      valueFrom:
+        secretKeyRef:
+          name: mongodb-uri
+          key: uri
+    - name: GIO_MIN_MEM
+      value: 512m
+    - name: GIO_MAX_MEM
+      value: 512m
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: ""
+  reporters:
+    elasticsearch:
+      enabled: false
+  ingress:
+    ingressClassName: traefik
+    scheme: https
+    path: /
+    pathType: Prefix
+    hosts:
+      - localhost
+    annotations: {}
+    tls:
+      - hosts:
+          - localhost
+        secretName: localhost-tls
+
+ui:
+  replicaCount: 1
+  image:
+    tag: 4.12.23
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+  ingress:
+    ingressClassName: traefik
+    scheme: https
+    path: /console
+    pathType: Prefix
+    hosts:
+      - localhost
+    annotations:
+      # The chart defaults target ingress-nginx; null removes them.
+      kubernetes.io/ingress.class: null
+      nginx.ingress.kubernetes.io/rewrite-target: null
+      traefik.ingress.kubernetes.io/router.middlewares: gravitee-strip-console@kubernetescrd
+    tls:
+      - hosts:
+          - localhost
+        secretName: localhost-tls

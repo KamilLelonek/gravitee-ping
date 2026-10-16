@@ -1,0 +1,32 @@
+# Short lifetime on purpose: cert-manager renews 8 hours before expiry and Traefik reloads the secret.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: localhost-tls
+  namespace: gravitee
+spec:
+  secretName: localhost-tls
+  duration: 24h
+  renewBefore: 8h
+  dnsNames:
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: local-ca
+    kind: ClusterIssuer
+---
+# The Console is built to live at /console/ but serves from /, so Traefik removes the prefix.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-console
+  namespace: gravitee
+spec:
+  stripPrefix:
+    prefixes:
+      - /console

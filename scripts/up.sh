@@ -7,6 +7,7 @@ CONTEXT=k3d-gravitee
 CERT_MANAGER_VERSION=v1.21.2
 MONGODB_CHART_VERSION=0.20.0
 GKO_VERSION=4.12.22
+APIM_VERSION=4.12.23
 
 # Keep Helm repositories inside the project so the user's Helm setup is neither read nor changed.
 export HELM_REPOSITORY_CONFIG="$PWD/.helm/repositories.yaml"
@@ -65,4 +66,10 @@ cluster_helm upgrade --install gko gko --repo https://helm.gravitee.io \
 # The operator creates its CRDs when it starts, so they may not exist yet.
 cluster_kubectl wait --for=create --for=condition=established --timeout=120s \
   crd/managementcontexts.gravitee.io crd/apiv4definitions.gravitee.io
+
+log "Installing Gravitee APIM"
+cluster_kubectl apply -f manifests/gravitee-edge.yaml
+cluster_helm upgrade --install apim apim --repo https://helm.gravitee.io \
+  --version "$APIM_VERSION" --namespace gravitee \
+  --values values/apim.yaml --wait --timeout 10m
 
