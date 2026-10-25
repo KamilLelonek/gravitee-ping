@@ -24,7 +24,7 @@ mongo:
 
 api:
   image:
-    tag: 4.12.23
+    tag: 4.12.25
     pullPolicy: IfNotPresent
   analytics:
     type: none
@@ -85,7 +85,7 @@ api:
 gateway:
   replicaCount: 2
   image:
-    tag: 4.12.23
+    tag: 4.12.25
     pullPolicy: IfNotPresent
   env:
     - name: gravitee_management_mongodb_uri

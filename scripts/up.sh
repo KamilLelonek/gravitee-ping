@@ -5,10 +5,10 @@ cd "$(dirname "$0")/.."
 # shellcheck source=scripts/common.sh
 . scripts/common.sh
 
-CERT_MANAGER_VERSION=v1.21.2
-MONGODB_CHART_VERSION=0.20.0
+CERT_MANAGER_VERSION=v1.21.3
+MONGODB_CHART_VERSION=0.20.2
 GKO_VERSION=4.12.22
-APIM_VERSION=4.12.23
+APIM_VERSION=4.12.25
 
 # Keep all Helm state inside the project so the user's Helm setup is neither read nor changed.
 export HELM_CACHE_HOME="$PWD/.helm/cache"
