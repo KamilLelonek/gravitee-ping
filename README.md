@@ -21,6 +21,7 @@ make up       # about 4 to 5 minutes the first time, under 30 seconds after that
 make ping     # fails unless GET /ping returns exactly "pong"
 make test     # about 35 s: re-run is a no-op, GET only, TLS ready, NetworkPolicies hold
 make status   # pods, API status, certificate status
+make backup   # MongoDB dump to backups/
 make down     # deletes the cluster
 ```
 
@@ -108,6 +109,15 @@ The gateway exposes Prometheus metrics on its technical port, 18082, behind basi
 
 Per-API numbers and errors such as a lost MongoDB connection are not in these metrics. They come from the analytics reporter and the gateway logs, which this setup does not ship anywhere.
 
+## Upgrading
+
+Versions are pinned in three places: the chart versions at the top of `scripts/up.sh`, the image tags in `values/`, and the k3s image in `k3d.yaml`. The operator and APIM share version lines, so `GKO_VERSION` and `APIM_VERSION` move to a new minor together.
+
+1. Read the release notes for every version that changes.
+2. Back up MongoDB with `make backup`. It writes a `mongodump` archive to `backups/`.
+3. Change the versions, then run `make up` and `make test`. Charts upgrade in place. A new k3s image only applies to a new cluster, so it needs `make down` first.
+4. Roll back a chart with `helm rollback <release> --kube-context k3d-gravitee -n <namespace>`. If the new APIM version migrated the database, restore the backup too.
+
 ## Before production
 
 1. Replace both default admin logins and keep secrets in an external manager, for example External Secrets with Vault.
@@ -115,7 +125,7 @@ Per-API numbers and errors such as a lost MongoDB connection are not in these me
 3. Run MongoDB as a replica set with backups and a dedicated application user, or use a managed service.
 4. Use several nodes with pod anti-affinity, and scale the gateway with a HorizontalPodAutoscaler.
 5. Add an analytics reporter (Elasticsearch or OpenSearch), Redis for rate limiting, and a Prometheus and Grafana stack with alerts.
-6. Add CI that runs `helm template` and `kubeconform`, pin images by digest, and write the upgrade and rollback procedure.
+6. Add CI that runs `helm template` and `kubeconform`, and pin images by digest.
 7. Run the Gravitee containers with a read-only root filesystem, which needs writable volumes for their log and temp folders.
 8. Use a real DNS name with an ACME issuer.
 9. Deploy through a GitOps controller (Flux or Argo CD) instead of re-running `helm upgrade`, which records a new Helm revision on every run even when nothing changes.

@@ -1,4 +1,4 @@
-.PHONY: up down ping test status
+.PHONY: up down ping test status backup
 
 # Build the cluster and everything on it, then call /ping.
 up:
@@ -17,6 +17,10 @@ status:
 	kubectl --context k3d-gravitee get pods --namespace gravitee
 	kubectl --context k3d-gravitee get pods --namespace pong
 	kubectl --context k3d-gravitee get apiv4definition,certificate --namespace gravitee
+
+# Dump MongoDB to backups/ before an upgrade.
+backup:
+	sh scripts/backup.sh
 
 # Delete the cluster and local files.
 down:
