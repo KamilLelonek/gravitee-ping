@@ -19,7 +19,7 @@ Port 443 on 127.0.0.1 must be free. The first run pulls about 2 GB of images. Me
 ## Run and test
 
 ```sh
-make up       # about 4 to 5 minutes the first time, under 30 seconds after that
+make up       # 3 to 5 minutes the first time, under 30 seconds after that
 make ping     # fails unless GET /ping returns exactly "pong"
 make test     # about 35 s: re-run is a no-op, GET only, TLS ready, NetworkPolicies hold
 make status   # pods, API status, certificate status
@@ -131,6 +131,10 @@ Versions are pinned in three places: the chart versions at the top of `scripts/u
 7. Run the Gravitee containers with a read-only root filesystem, which needs writable volumes for their log and temp folders.
 8. Use a real DNS name with an ACME issuer.
 9. Deploy through a GitOps controller (Flux or Argo CD) instead of re-running `helm upgrade`, which records a new Helm revision on every run even when nothing changes.
+10. Require API keys or JWT on the plan and add a rate-limit policy. The keyless plan fits `/ping`, not a real API.
+11. Schedule and test backups. `make backup` exists but runs only by hand.
+12. Ship logs to a central store, for example Loki. Today they stay in the pods.
+13. Encrypt traffic inside the cluster. Traefik to the gateway and the gateway to `pong` use plain HTTP.
 
 ## Left out within the time box
 
