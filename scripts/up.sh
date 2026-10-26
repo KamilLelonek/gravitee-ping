@@ -77,12 +77,12 @@ cluster_helm upgrade --install apim apim --repo https://helm.gravitee.io \
 
 log "Deploying the pong backend and the ping API"
 cluster_kubectl apply -f manifests/pong.yaml
-# The operator's admission webhook can refuse connections for a few seconds after it reports ready.
-# Only that error is retried; any other error stops the build at once.
+# Right after start, the operator's webhook, or the Management API its dry-run calls, can refuse
+# connections for a few seconds. Only those errors are retried; any other error stops the build.
 attempt=1
 until output=$(cluster_kubectl apply -f manifests/ping-api.yaml 2>&1); do
   case "$output" in
-    *"failed calling webhook"*) ;;
+    *"failed calling webhook"* | *"apim-api.gravitee.svc"*"connection refused"*) ;;
     *) printf '%s\n' "$output" >&2; fail "manifests/ping-api.yaml was rejected" ;;
   esac
   [ "$attempt" -lt 10 ] || { printf '%s\n' "$output" >&2; fail "the operator webhook did not answer"; }
