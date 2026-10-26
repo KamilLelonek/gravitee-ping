@@ -2,19 +2,19 @@
 
 `make up` creates a local Kubernetes cluster, installs Gravitee API Management (Community Edition) and a small backend, and exposes `GET /ping` on the Gravitee gateway. The response body is `pong`. `make down` removes everything.
 
-A visual guide with diagrams of the whole setup: https://kamillelonek.github.io/gravitee-ping-guide/
+Diagrams, design reasoning and the production plan: https://kamillelonek.github.io/gravitee-ping-guide/
 
 ## Prerequisites
 
 | Tool | Tested version | Notes |
 |---|---|---|
-| Docker | 29.8 (Docker Desktop, macOS) | Give Docker at least 4 CPUs and 6 GB of memory. |
-| k3d | 5.9.0 | Runs Kubernetes (k3s) inside Docker. |
-| kubectl | 1.37 | 1.31 or newer is required. |
+| Docker | 29.8 (Docker Desktop, macOS) | At least 4 CPUs and 6 GB of memory. |
+| k3d | 5.9.0 | |
+| kubectl | 1.37 | 1.31 or newer. |
 | Helm | 4.3 | |
-| make, curl, openssl | system versions | Present on macOS; on Linux install `make` if missing. |
+| make, curl, openssl | system versions | |
 
-Port 443 on 127.0.0.1 must be free. The first run pulls about 2 GB of images. Measured on an Apple Silicon Mac: the stack requests 1.6 CPU and 2.5 GB, and uses about 3.9 GB of memory when idle.
+Port 443 on 127.0.0.1 must be free. The first run pulls about 2 GB of images.
 
 ## Run and test
 
@@ -27,117 +27,49 @@ make backup   # MongoDB dump to backups/
 make down     # deletes the cluster
 ```
 
-The same call by hand. The certificate is signed by a local CA that `make up` exports:
+By hand, trusting the local CA that `make up` exports:
 
 ```sh
 curl --cacert .certs/ca.crt https://localhost/ping                # pong
 curl --cacert .certs/ca.crt -X POST https://localhost/ping -i     # 404: only GET is exposed
 ```
 
-The Gravitee Console runs at https://localhost/console (user `admin`, password `admin`). The browser warns about the certificate until you trust `.certs/ca.crt` or accept the warning.
+Console: https://localhost/console (`admin` / `admin`).
 
-Gateway metrics, in Prometheus format:
+Gateway metrics:
 
 ```sh
 kubectl --context k3d-gravitee -n gravitee port-forward svc/apim-gateway 18082:18082
 curl -u admin:adminadmin http://localhost:18082/_node/metrics/prometheus
 ```
 
-## Architecture
+## Choices
 
-```
-host (macOS / Linux)       curl --cacert .certs/ca.crt https://localhost/ping   ->  pong
-   |  127.0.0.1:443, mapped by k3d to the cluster's load balancer
-+-- k3d cluster "gravitee" (1 node, k3s) ------------------------------------------+
-|  ns kube-system     traefik             TLS termination, routes by path           |
-|  ns cert-manager    cert-manager        local CA -> ClusterIssuer "local-ca"      |
-|  ns gravitee        mongodb             API definitions and gateway state         |
-|                     apim-api            Management API                            |
-|                     apim-ui             Console, served under /console            |
-|                     apim-gateway x2     serves /                                  |
-|                     gko                 Gravitee Kubernetes Operator              |
-|  ns pong            nginx x2            GET /ping -> "pong"                       |
-|                     NetworkPolicy       accepts traffic from the gateway only     |
-+-----------------------------------------------------------------------------------+
-```
-
-A request goes `curl -> Traefik (TLS) -> gateway -> API "/ping" -> pong`.
-
-The API itself is a Kubernetes resource, `manifests/ping-api.yaml`. Its configuration takes this path: the operator reads the `ApiV4Definition` and pushes it to the Management API, the Management API stores it in MongoDB, and every gateway replica picks it up from MongoDB on its sync cycle. The gateway never calls the Management API to serve traffic. If the Management API stops, the gateway keeps serving the APIs it has loaded. A changed API reaches the gateways on their next sync, a few seconds after `make up` returns.
-
-`make up` runs `scripts/up.sh`, which installs in this order: cluster, cert-manager and the local CA, MongoDB, the operator, APIM, the backend, the API. Every step waits for the previous one, and running it again changes nothing. On a fresh install the operator pod restarts once: it registers its CRDs at startup and starts watching them a moment before the API server serves them. This is upstream behaviour and the second start is clean.
-
-Security in this setup:
-
-- Generated on the first run and kept only in Secrets: the MongoDB password and the key that signs Console login tokens. Neither is in git, on a command line, or in a ConfigMap.
-- The chart's sample users are removed, so the only remaining defaults are the two admin logins listed under Assumptions.
-- Every pod runs as non-root with all capabilities dropped. NetworkPolicies let only the gateway reach `pong`, and only Gravitee reach MongoDB.
-
-The gateway runs two replicas with a PodDisruptionBudget even on one node, so a rolling update or a pod restart never takes `/ping` down. On a real cluster the same settings spread across nodes.
-
-## Choices and alternatives
-
-| Choice | Alternatives considered | Why this one |
-|---|---|---|
-| Full APIM with the Gravitee Kubernetes Operator | DB-less gateway; creating the API with a REST script | Matches "deploy APIM" literally and keeps the API as code. DB-less has no Management API or Console. A REST script is imperative and has to handle "already exists" on re-runs. |
-| k3d | kind, minikube | Light, starts fast, maps a host port in one line, and ships Traefik, a load balancer and a NetworkPolicy controller. minikube needs `minikube tunnel` in a second terminal. |
-| Traefik (bundled with k3s) | ingress-nginx, Gravitee gateway terminating TLS itself | Already in the cluster and maintained. ingress-nginx is archived. Terminating TLS on the gateway would leave the Console reachable only through port-forward. |
-| Paths on `localhost` | Host names such as `console.localhost` | `*.localhost` does not resolve in Safari or for the macOS system resolver. |
-| cert-manager with a local CA | Static certificate in the repo, mkcert | Issues and renews certificates automatically. The leaf certificate lives 24 hours and is renewed 8 hours before expiry, so renewal happens daily. In production only the issuer changes, to ACME. |
-| Makefile calling a POSIX shell script | helmfile, Flux | No extra tool to install. The operator creates its CRDs at startup, so the script has to wait for them between steps, which a plain script does clearly. |
-| MongoDB 8.0 standalone | PostgreSQL through JDBC, MongoDB replica set | MongoDB is Gravitee's default repository. 8.0 is the newest version Gravitee tests. A replica set is listed below. |
-| nginx-unprivileged with a config map | A custom app image | No image to build or push. The body is exactly `pong`, without a trailing newline. |
+- Full APIM with the Gravitee Kubernetes Operator, so the API is a Kubernetes resource in git.
+- k3d, because it ships Traefik and a NetworkPolicy controller.
+- Traefik for TLS and routing by path; ingress-nginx is archived.
+- cert-manager with a local CA, so certificates renew by themselves.
+- A Makefile and a POSIX shell script, no extra tools.
 
 ## Assumptions
 
-- Everything is reached on `localhost`. There is no DNS name.
-- Two Community Edition default logins stay for a local demo: Console and Management API `admin/admin`, and the gateway technical API `admin/adminadmin`.
-- Analytics are not needed, so Elasticsearch is not installed. The Console's analytics pages stay empty.
-- The Developer Portal is not needed and is disabled.
-- `GET /ping` means only GET. Other methods get 404 from the gateway.
-- Docker runs as root (Docker Desktop or the standard Linux daemon). Rootless Docker cannot bind port 443.
-- Tested on macOS (Docker Desktop) and on Linux: Ubuntu 24.04 with `dash` as `/bin/sh` and the same tool versions, run in a container with host networking against the same Docker engine. A separate Linux host was not available.
+- Everything is on `localhost`, with no DNS name.
+- Two default logins stay: Console `admin/admin`, gateway technical API `admin/adminadmin`.
+- No Elasticsearch, so the Console's analytics pages stay empty. No Developer Portal.
+- `GET /ping` means only GET.
+- Docker runs as root; rootless Docker cannot bind port 443.
+- Tested on macOS and in an Ubuntu 24.04 container on the same Docker engine.
 
-## Monitoring: what I would watch
+## What to watch
 
-The gateway exposes Prometheus metrics on its technical port, 18082, behind basic auth. A Prometheus Operator `ServiceMonitor` with `basicAuth` would scrape it. The metrics are per gateway instance, labelled by status code, method and listening port. I would watch:
-
-- Error ratio: `http_server_requests_total` with `code=~"5.."` against all requests, on port 8082.
-- Latency: `http_server_response_time_seconds` gives a sum, a count and a max. Average and max are available as is; percentiles would need histogram buckets enabled.
-- Load: `http_server_active_connections` and `http_server_active_requests`.
-- JVM: `jvm_memory_used_bytes` against the 512 MB heap, and `jvm_gc_pause_seconds`.
-- Pod restarts and readiness, from Kubernetes itself.
-- Certificate expiry, from cert-manager's own metrics.
-
-Per-API numbers and errors such as a lost MongoDB connection are not in these metrics. They come from the analytics reporter and the gateway logs, which this setup does not ship anywhere.
-
-## Upgrading
-
-Versions are pinned in three places: the chart versions at the top of `scripts/up.sh`, the image tags in `values/`, and the k3s image in `k3d.yaml`. The operator and APIM share version lines, so `GKO_VERSION` and `APIM_VERSION` move to a new minor together.
-
-1. Read the release notes for every version that changes.
-2. Back up MongoDB with `make backup`. It writes a `mongodump` archive to `backups/`.
-3. Change the versions, then run `make up` and `make test`. Charts upgrade in place. A new k3s image only applies to a new cluster, so it needs `make down` first.
-4. Roll back a chart with `helm rollback <release> --kube-context k3d-gravitee -n <namespace>`. If the new APIM version migrated the database, restore the backup too.
+- 5xx ratio of `http_server_requests_total`, and `http_server_response_time_seconds`.
+- `jvm_memory_used_bytes` against the 512 MB heap.
+- Pod restarts and certificate expiry.
 
 ## Before production
 
-1. Replace both default admin logins and keep secrets in an external manager, for example External Secrets with Vault.
-2. Put the Console and the Management API behind SSO and on an internal entrypoint, separate from public API traffic. Allow the gateway technical port 18082 only from the monitoring namespace.
-3. Run MongoDB as a replica set with backups and a dedicated application user, or use a managed service.
-4. Use several nodes with pod anti-affinity, and scale the gateway with a HorizontalPodAutoscaler.
-5. Add an analytics reporter (Elasticsearch or OpenSearch), Redis for rate limiting, and a Prometheus and Grafana stack with alerts.
-6. Add CI that runs `helm template` and `kubeconform`, and pin images by digest.
-7. Run the Gravitee containers with a read-only root filesystem, which needs writable volumes for their log and temp folders.
-8. Use a real DNS name with an ACME issuer.
-9. Deploy through a GitOps controller (Flux or Argo CD) instead of re-running `helm upgrade`, which records a new Helm revision on every run even when nothing changes.
-10. Require API keys or JWT on the plan and add a rate-limit policy. The keyless plan fits `/ping`, not a real API.
-11. Schedule and test backups. `make backup` exists but runs only by hand.
-12. Ship logs to a central store, for example Loki. Today they stay in the pods.
-13. Encrypt traffic inside the cluster. Traefik to the gateway and the gateway to `pong` use plain HTTP.
-
-## Left out within the time box
-
-- Elasticsearch and analytics: the heaviest component, and optional in the brief.
-- Developer Portal: not needed to serve `/ping`.
-- Changing the default admin passwords: needs a bcrypt hash and secret wiring. It is item 1 above.
+- Replace the default logins, put the Console behind SSO, keep secrets in a vault.
+- MongoDB replica set with scheduled backups.
+- Several nodes and an autoscaler for the gateway.
+- Analytics, rate limiting, alerts and central logs.
+- CI checks, images pinned by digest, GitOps.
