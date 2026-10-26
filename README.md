@@ -2,6 +2,8 @@
 
 `make up` creates a local Kubernetes cluster, installs Gravitee API Management (Community Edition) and a small backend, and exposes `GET /ping` on the Gravitee gateway. The response body is `pong`. `make down` removes everything.
 
+A visual guide with diagrams of the whole setup: https://kamillelonek.github.io/gravitee-ping-guide/
+
 ## Prerequisites
 
 | Tool | Tested version | Notes |
