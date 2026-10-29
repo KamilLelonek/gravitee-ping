@@ -34,7 +34,7 @@ if ! k3d cluster list gravitee >/dev/null 2>&1; then
   port_check=0
   curl --silent --output /dev/null --max-time 2 http://127.0.0.1:443 || port_check=$?
   [ "$port_check" -eq 7 ] || fail "port 443 on 127.0.0.1 is already in use"
-  k3d cluster create --config k3d.yaml
+  k3d cluster create --config k3d.yaml --kubeconfig-switch-context=false
 fi
 cluster_kubectl -n kube-system wait --for=create deployment/traefik --timeout=180s
 cluster_kubectl -n kube-system rollout status deployment/traefik --timeout=180s
