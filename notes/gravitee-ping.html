@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gravitee-ping: Gravitee API Management on local Kubernetes</title>
+<meta name="description" content="How gravitee-ping runs Gravitee API Management on a local Kubernetes cluster: six diagrams and a full written guide.">
+<meta name="author" content="Kamil Lelonek">
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --color-paper: #f5f5f5; --color-ink: #2d3142; --color-muted: #4f5d75; --color-soft: #5a6580;
+  --color-rule: rgba(45,49,66,0.12); --color-accent: #bf4520; --color-link: #2e5aa8;
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+}
+body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink); padding: 3rem 2rem; }
+.container { max-width: 1440px; margin: 0 auto; }
+.eyebrow { font-size: 0.78rem; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.75rem; }
+h1 { font-size: clamp(2rem, 3vw + 1rem, 2.75rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 0.75rem; }
+h2 { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 0.5rem; }
+.subtitle, .lead { font-size: 1.1rem; line-height: 1.6; color: var(--color-muted); max-width: 72ch; }
+.lead { margin-bottom: 1.5rem; }
+header { margin-bottom: 2rem; }
+nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin: 1.5rem 0 0; font-size: 0.85rem; letter-spacing: 0.04em; }
+nav a { color: var(--color-link); text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+.pitch { background: #ffffff; border: 1px solid var(--color-rule); border-left: 3px solid var(--color-accent); border-radius: 6px; padding: 1.25rem 1.5rem; margin-bottom: 3.5rem; }
+.pitch .quote { font-size: 1.15rem; line-height: 1.5; color: var(--color-ink); }
+section { margin-bottom: 4rem; padding-top: 2rem; border-top: 1px solid rgba(45,49,66,0.10); }
+.diagram-container { width: 100%; overflow-x: auto; }
+svg { width: 100%; display: block; }
+@media print { .diagram-container { overflow-x: visible; } svg { min-width: 0 !important; } section { break-inside: avoid; } }
+.cards { display: grid; gap: 1rem; margin-top: 1.25rem; }
+@media (max-width: 900px) { .cards { grid-template-columns: 1fr !important; } }
+.card { background: #ffffff; border-radius: 6px; border: 1px solid var(--color-rule); padding: 1.25rem; }
+.card-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.875rem; padding-bottom: 0.875rem; border-bottom: 1px solid rgba(45,49,66,0.08); }
+.card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.card-dot.ink { background: var(--color-ink); } .card-dot.muted { background: var(--color-muted); } .card-dot.coral { background: var(--color-accent); }
+.card h3 { font-size: 1rem; font-weight: 600; }
+.card ul { list-style: none; color: var(--color-ink); font-size: 0.95rem; line-height: 1.6; }
+.card li { margin-bottom: 0.35rem; padding-left: 0.875rem; position: relative; }
+.card li::before { content: '-'; position: absolute; left: 0; color: rgba(45,49,66,0.35); }
+.toc { flex-direction: column; gap: 0.4rem; margin: 0 0 2rem; padding: 1rem 1.25rem; background: #ffffff; border: 1px solid var(--color-rule); border-radius: 6px; max-width: 72ch; }
+article.wide { max-width: none; }
+article { max-width: 80ch; font-size: 1.02rem; line-height: 1.65; }
+article h3 { font-size: 1.4rem; font-weight: 600; margin: 2.75rem 0 0.75rem; padding-top: 1.25rem; border-top: 1px solid rgba(45,49,66,0.10); }
+article h4 { font-size: 1.05rem; font-weight: 600; margin: 1.75rem 0 0.5rem; }
+article p, article ul, article ol, article pre, article blockquote, article .table-wrap { margin-bottom: 0.9rem; }
+article ul, article ol { padding-left: 1.4rem; }
+article li { margin-bottom: 0.3rem; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: rgba(45,49,66,0.06); padding: 0.05em 0.3em; border-radius: 3px; }
+article pre { font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5; background: #ffffff; border: 1px solid var(--color-rule); border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto; }
+article blockquote { border-left: 3px solid var(--color-accent); padding: 0.25rem 0 0.25rem 1rem; color: var(--color-muted); }
+article .question { margin: 1.4rem 0 0.3rem; }
+article strong { font-weight: 600; }
+.table-wrap { overflow-x: auto; }
+article table { border-collapse: collapse; width: 100%; font-size: 0.92rem; background: #ffffff; }
+article th, article td { border: 1px solid var(--color-rule); padding: 0.45rem 0.6rem; text-align: left; vertical-align: top; }
+article th { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); background: var(--color-paper); }
+footer { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(45,49,66,0.10); font-size: 0.72rem; letter-spacing: 0.06em; color: var(--color-soft); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<p class="eyebrow">gravitee-ping · Platform engineer exercise · Kamil Lelonek</p>
+<h1>Gravitee API Management on local Kubernetes</h1>
+<nav><a href="#brief">00 · The brief</a> <a href="#architecture">01 · Where everything runs</a> <a href="#request">02 · One request</a> <a href="#config">03 · How the API gets there</a> <a href="#make-up">04 · One command up</a> <a href="#security">05 · Security</a> <a href="#production">06 · Before production</a> <a href="#knowledge-base">07 · Knowledge base</a></nav>
+</header>
+<div class="pitch">
+<p class="eyebrow">In one paragraph</p>
+<p class="quote"><code>make up</code> builds a one-node Kubernetes cluster in Docker with k3d and installs Gravitee API Management Community Edition: the gateway, the Management API and the Console, with MongoDB as the database. The API itself is a Kubernetes resource that the Gravitee operator publishes. An operator is a small controller program that runs as a pod in the cluster. It reads one kind of Kubernetes object and makes Gravitee's own state match it. So everything is code, and re-running changes nothing. A small nginx backend answers pong, and only the gateway may reach it. TLS comes from cert-manager with a local CA and renews by itself. <code>make test</code> proves the README's claims, and <code>make down</code> removes everything.</p>
+</div>
+<section id="brief">
+<p class="eyebrow">00 · The brief</p>
+<h2>What was asked, and what was delivered</h2>
+<p class="lead">Every requirement from the exercise, how it is met, and the file to open to check it.</p>
+<article class="wide">
+<div class="table-wrap"><table><thead><tr><th>Brief says</th><th>What was built</th><th>File</th></tr></thead><tbody><tr><td>Local Kubernetes cluster</td><td>k3d, one node</td><td><code>k3d.yaml</code></td></tr><tr><td>Gravitee APIM Community Edition</td><td>Helm chart <code>apim</code> 4.12.25</td><td><code>scripts/up.sh</code>, <code>values/apim.yaml</code></td></tr><tr><td>Whatever the gateway needs</td><td>MongoDB 8.0</td><td><code>values/mongodb.yaml</code></td></tr><tr><td>Backend that replies "pong"</td><td>nginx with a 6-line config</td><td><code>manifests/pong.yaml</code></td></tr><tr><td><code>GET /ping</code> on the gateway, body exactly <code>pong</code></td><td><code>ApiV4Definition</code> called <code>ping</code></td><td><code>manifests/ping-api.yaml</code></td></tr><tr><td>One command up, one down</td><td><code>make up</code>, <code>make down</code></td><td><code>Makefile</code></td></tr><tr><td>Configuration as code, idempotent</td><td>everything in git; <code>helm upgrade --install</code> and <code>kubectl apply</code></td><td>all</td></tr><tr><td>Production-grade configuration</td><td>pinned versions, generated secrets, non-root pods, NetworkPolicies, 2 gateways + PDB, probes, resource limits</td><td>various</td></tr><tr><td>macOS and Linux</td><td>POSIX <code>sh</code>; tested on macOS and in an Ubuntu 24.04 container</td><td><code>scripts/*.sh</code></td></tr><tr><td>README</td><td>prerequisites, run and test, and short lists of choices, assumptions, what to watch and what production still needs; the reasoning is on this page</td><td><code>README.md</code></td></tr><tr><td>Written assumptions</td><td>localhost only, two default logins, no analytics, no Developer Portal, GET only, Docker running as root</td><td><code>README.md</code>, "Assumptions"</td></tr><tr><td>Fits in 4 CPUs, 6 GB memory, about 2 GB of images</td><td>requests 1.6 CPU and 2.5 GB; about 3.9 GB used when idle; about 1.9 GB of images</td><td>resource limits in <code>values/</code> and <code>manifests/</code></td></tr><tr><td>3 to 4 hour time box</td><td>what did not fit is listed, not hidden</td><td>"What is missing" on this page</td></tr><tr><td>Optional: skip Elasticsearch</td><td>skipped</td><td><code>values/apim.yaml</code></td></tr><tr><td>Optional: HTTPS with auto-renewed certs</td><td>cert-manager, 24 h cert, renewed after 16 h</td><td><code>manifests/cluster-issuer.yaml</code>, <code>manifests/gravitee-edge.yaml</code></td></tr><tr><td>Optional: gateway metrics + what to watch</td><td>Prometheus endpoint on port 18082, README section</td><td><code>values/apim.yaml</code>, <code>README.md</code></td></tr><tr><td>Private Git repo, full history</td><td>19 commits, one per step, not squashed</td><td>-</td></tr></tbody></table></div>
+<p>"Idempotent" means running it twice gives the same result as running it once. Proof: <code>make test</code> runs <code>make up</code> a second time and checks that no pod restarted.</p>
+</article>
+</section>
+<section id="architecture">
+<p class="eyebrow">01 · Where everything runs</p>
+<h2>One cluster inside Docker</h2>
+<p class="lead">Everything runs in one k3s node inside Docker. Traefik owns port 443 and sends each path to the right service. The gateway is the only part on the request path, and it reads its APIs from MongoDB, not from the Management API.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc" style="min-width:1280px">
+<title id="architecture-title">Where everything runs</title>
+<desc id="architecture-desc">Architecture of the k3d cluster: Traefik routes HTTPS from the laptop to the Gravitee gateway, Console and Management API, and the Console page calls the Management API from the browser; the gateway syncs APIs from MongoDB and proxies /ping to the pong backend.</desc>
+<defs>
+<marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="architecture-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="architecture-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="architecture-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="216" y="24" width="1040" height="500" rx="8" fill="transparent" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="6,4"/><text x="228" y="41" fill="#4f5d75" font-size="9.5" font-weight="500" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.12em">K3D CLUSTER · ONE K3S NODE INSIDE DOCKER</text>
+<rect x="24" y="228" width="176" height="120" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><rect x="32" y="232" width="83" height="14" rx="2" fill="#f5f5f5"/><text x="37" y="242.5" fill="#5a6580" font-size="8.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">YOUR LAPTOP</text>
+<rect x="424" y="56" width="608" height="388" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><rect x="432" y="60" width="129" height="14" rx="2" fill="#f5f5f5"/><text x="437" y="70.5" fill="#5a6580" font-size="8.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">NAMESPACE GRAVITEE</text>
+<rect x="1064" y="228" width="176" height="176" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><rect x="1072" y="232" width="102" height="14" rx="2" fill="#f5f5f5"/><text x="1077" y="242.5" fill="#5a6580" font-size="8.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">NAMESPACE PONG</text>
+<line x1="184" y1="288" x2="248" y2="288" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+<rect x="195.75" y="267" width="40.5" height="14" rx="2" fill="#f5f5f5"/><text x="216" y="277.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">HTTPS</text>
+<line x1="388" y1="288" x2="456" y2="288" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+<rect x="398.5" y="267" width="47.0" height="14" rx="2" fill="#f5f5f5"/><text x="422" y="277.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">PATH /</text>
+<path d="M 340,260 V 164 Q 340,156 348,156 H 456" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+<rect x="372.0" y="135" width="60.0" height="14" rx="2" fill="#f5f5f5"/><text x="402" y="145.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">/CONSOLE</text>
+<path d="M 300,260 V 104 Q 300,96 308,96 H 752 Q 760,96 760,104 V 128" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+<rect x="580.25" y="75" width="79.5" height="14" rx="2" fill="#f5f5f5"/><text x="620" y="85.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">/MANAGEMENT</text>
+<line x1="318" y1="436" x2="318" y2="316" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-arrow)"/>
+<rect x="326" y="368" width="73.0" height="14" rx="2" fill="#f5f5f5"/><text x="330" y="379" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">TLS SECRET</text>
+<line x1="616" y1="288" x2="680" y2="288" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-arrow)"/>
+<rect x="631.0" y="267" width="34.0" height="14" rx="2" fill="#f5f5f5"/><text x="648" y="277.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">SYNC</text>
+<line x1="760" y1="184" x2="760" y2="260" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+<rect x="768" y="214" width="40.5" height="14" rx="2" fill="#f5f5f5"/><text x="772" y="225" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">WRITE</text>
+<line x1="888" y1="156" x2="840" y2="156" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+<rect x="847.0" y="135" width="34.0" height="14" rx="2" fill="#f5f5f5"/><text x="864" y="145.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">PUSH</text>
+<line x1="616" y1="156" x2="680" y2="156" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-arrow)"/>
+<rect x="621.25" y="135" width="53.5" height="14" rx="2" fill="#f5f5f5"/><text x="648" y="145.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">BROWSER</text>
+<path d="M 536,316 V 368 Q 536,376 544,376 H 1144 Q 1152,376 1152,368 V 316" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+<rect x="904.25" y="355" width="79.5" height="14" rx="2" fill="#f5f5f5"/><text x="944" y="365.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">PROXY /PING</text>
+<rect x="40" y="260" width="144" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="40" y="260" width="144" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="48" y="266" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="62.5" y="275.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">YOU</text>
+<text x="112.0" y="292.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">You</text>
+<text x="112.0" y="308.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">curl, browser</text>
+<rect x="248" y="260" width="140" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="248" y="260" width="140" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="256" y="266" width="35" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="273.5" y="275.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+<text x="318.0" y="292.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Traefik</text>
+<text x="318.0" y="308.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">kube-system · TLS</text>
+<rect x="248" y="436" width="140" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="248" y="436" width="140" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="256" y="442" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="270.5" y="451.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">TLS</text>
+<text x="318.0" y="468.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">cert-manager</text>
+<text x="318.0" y="484.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">24 h cert, renews</text>
+<rect x="456" y="128" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="456" y="128" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="464" y="134" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="476.0" y="143.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">UI</text>
+<text x="536.0" y="160.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Console</text>
+<text x="536.0" y="176.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">runs in the browser</text>
+<rect x="680" y="128" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="680" y="128" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="688" y="134" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="702.5" y="143.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="760.0" y="160.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Management API</text>
+<text x="760.0" y="176.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">creates APIs</text>
+<rect x="888" y="128" width="120" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="888" y="128" width="120" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="896" y="134" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="910.5" y="143.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GKO</text>
+<text x="948.0" y="160.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Operator</text>
+<text x="948.0" y="176.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">watches CRDs</text>
+<rect x="456" y="260" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="456" y="260" width="160" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="464" y="266" width="24" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="476.0" y="275.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<text x="536.0" y="292.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway × 2</text>
+<text x="536.0" y="308.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">:8082 · serves /ping</text>
+<rect x="680" y="260" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="680" y="260" width="160" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<rect x="688" y="266" width="24" height="13" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+<text x="700.0" y="275.5" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<text x="760.0" y="292.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB 8.0</text>
+<text x="760.0" y="308.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">APIs, users, plans</text>
+<rect x="1080" y="260" width="144" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1080" y="260" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1088" y="266" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="1102.5" y="275.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="1152.0" y="292.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong</text>
+<text x="1152.0" y="308.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">nginx × 2 · :8080</text>
+<line x1="24" y1="548" x2="1256" y2="548" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="568" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<rect x="100" y="560" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<text x="122" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Focal: the gateway</text>
+<rect x="281.2" y="560" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="303.2" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Service</text>
+<rect x="392.0" y="560" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="414.0" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Database</text>
+<rect x="509.2" y="560" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<text x="531.2" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">You</text>
+<line x1="594.4" y1="565" x2="610.4" y2="565" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+<text x="616.4" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Request path</text>
+<line x1="737.2" y1="565" x2="753.2" y2="565" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+<text x="759.2" y="569" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Sync, secret, browser call</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr 0.85fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>Key points</h3></div><ul>
+<li>The gateway never calls the Management API to serve traffic.</li>
+<li>If the Management API stops, <code>/ping</code> still works.</li>
+<li>The Console is only a web page. The browser loads it from <code>/console</code>, then calls the Management API through <code>/management</code>.</li>
+<li>Two gateway pods and a PodDisruptionBudget keep <code>/ping</code> up during a rolling update.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>Why Traefik</h3></div><ul>
+<li>It ships with k3s, so there is nothing extra to install.</li>
+<li>ingress-nginx is archived.</li>
+<li>One entrypoint serves the Console and the gateway.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot muted"></span><h3>Numbers</h3></div><ul>
+<li>1.6 CPU and 2.5 GB requested.</li>
+<li>About 3.9 GB used when idle.</li>
+<li>About 1.9 GB of images.</li>
+</ul></div>
+</div>
+</section><section id="request">
+<p class="eyebrow">02 · One request</p>
+<h2>GET /ping, step by step</h2>
+<p class="lead">Traefik decrypts TLS and passes plain HTTP to a gateway pod. The gateway finds the API by its path, checks the flow, and calls pong. A POST matches no flow, and <code>matchRequired: true</code> makes the gateway answer 404.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 648" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="request-title request-desc" style="min-width:1280px">
+<title id="request-title">One GET /ping request</title>
+<desc id="request-desc">Sequence of a GET /ping call: Traefik decrypts TLS, the gateway matches the ping API and its GET-only flow, calls pong and returns pong; any other method gets 404 from the gateway.</desc>
+<defs>
+<marker id="request-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="request-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="request-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="request-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="440" y="300" width="720" height="224" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+<rect x="440" y="300" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+<text x="460" y="312" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.12em">ALT</text>
+<text x="500" y="330" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.04em">[method is GET]</text>
+<text x="500" y="462" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.04em">[POST, PUT or anything else]</text>
+<line x1="448" y1="444" x2="1152" y2="444" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="160" y1="88" x2="160" y2="584" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="480" y1="88" x2="480" y2="584" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="800" y1="88" x2="800" y2="584" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="1120" y1="88" x2="1120" y2="584" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<rect x="476" y="132" width="8" height="432" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="796" y="220" width="8" height="288" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1116" y="344" width="8" height="52" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<line x1="160" y1="132" x2="476" y2="132" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#request-arrow-link)"/><rect x="271.75" y="111" width="92.5" height="14" rx="2" fill="#f5f5f5"/><text x="318.0" y="121.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">GET /PING TLS</text>
+<path d="M 484,160 H 508 Q 516,160 516,168 V 176 Q 516,184 508,184 H 484" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#request-arrow)"/><rect x="524" y="164" width="79.5" height="14" rx="2" fill="#f5f5f5"/><text x="528" y="175" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">DECRYPT TLS</text>
+<line x1="484" y1="220" x2="796" y2="220" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#request-arrow-link)"/><rect x="606.75" y="199" width="66.5" height="14" rx="2" fill="#f5f5f5"/><text x="640.0" y="209.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">GET /PING</text>
+<path d="M 804,248 H 828 Q 836,248 836,256 V 264 Q 836,272 828,272 H 804" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#request-arrow)"/><rect x="844" y="252" width="99.0" height="14" rx="2" fill="#f5f5f5"/><text x="848" y="263" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">FIND API /PING</text>
+<line x1="804" y1="356" x2="1116" y2="356" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#request-arrow-link)"/><rect x="926.75" y="335" width="66.5" height="14" rx="2" fill="#f5f5f5"/><text x="960.0" y="345.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">GET /PING</text>
+<line x1="1116" y1="388" x2="804" y2="388" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#request-arrow)"/><rect x="930.0" y="367" width="60.0" height="14" rx="2" fill="#f5f5f5"/><text x="960.0" y="377.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">200 PONG</text>
+<line x1="796" y1="420" x2="484" y2="420" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#request-arrow-accent)"/><rect x="610.0" y="399" width="60.0" height="14" rx="2" fill="#f5f5f5"/><text x="640.0" y="409.5" fill="#bf4520" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">200 PONG</text>
+<line x1="796" y1="496" x2="484" y2="496" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#request-arrow)"/><rect x="600.25" y="475" width="79.5" height="14" rx="2" fill="#f5f5f5"/><text x="640.0" y="485.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">404 NO FLOW</text>
+<line x1="476" y1="556" x2="160" y2="556" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#request-arrow)"/><rect x="278.25" y="535" width="79.5" height="14" rx="2" fill="#f5f5f5"/><text x="318.0" y="545.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">SAME ANSWER</text>
+<rect x="80" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="80" y="32" width="160" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="88" y="38" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="102.5" y="47.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">YOU</text>
+<text x="160.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">You</text>
+<text x="160.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">curl</text>
+<rect x="400" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="400" y="32" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="408" y="38" width="35" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="425.5" y="47.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+<text x="480.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Traefik</text>
+<text x="480.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">holds :443</text>
+<rect x="720" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="720" y="32" width="160" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="728" y="38" width="24" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="740.0" y="47.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<text x="800.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway</text>
+<text x="800.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">API rules</text>
+<rect x="1040" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1040" y="32" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1048" y="38" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="1062.5" y="47.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="1120.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong</text>
+<text x="1120.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">nginx :8080</text>
+<line x1="24" y1="608" x2="1256" y2="608" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="628" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<line x1="100" y1="625" x2="116" y2="625" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#request-arrow-link)"/>
+<text x="122" y="629" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Call</text>
+<line x1="191.6" y1="625" x2="207.6" y2="625" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#request-arrow)"/>
+<text x="213.6" y="629" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Answer</text>
+<line x1="296.0" y1="625" x2="312.0" y2="625" stroke="#bf4520" stroke-width="1.2" marker-end="url(#request-arrow-accent)"/>
+<text x="318.0" y="629" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Happy path answer</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>Key points</h3></div><ul>
+<li>Anyone can call <code>/ping</code>. The caller sends no API key or password.</li>
+<li>The flow is a filter that only matches GET.</li>
+<li>The body is exactly pong, with no newline, because nginx uses <code>return 200 'pong'</code>.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>Edge cases</h3></div><ul>
+<li><code>/ping/extra</code> reaches pong, which answers its own 404.</li>
+<li><code>/pingx</code> matches no API, so the gateway answers 404.</li>
+<li><code>POST /ping</code> gets 404 from the gateway.</li>
+</ul></div>
+</div>
+</section><section id="config">
+<p class="eyebrow">03 · How the API gets there</p>
+<h2>From YAML to the gateway</h2>
+<p class="lead">The API is a Kubernetes object, so it lives in git like everything else. The operator turns it into a REST call to the Management API, which saves it in MongoDB. Every gateway polls MongoDB and loads the new API within seconds.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="config-title config-desc" style="min-width:1280px">
+<title id="config-title">From YAML to the gateway</title>
+<desc id="config-desc">Sequence showing how the ping API travels: kubectl applies the ApiV4Definition, the operator pushes it to the Management API, which saves it in MongoDB, and every gateway reads MongoDB on a short loop and loads it.</desc>
+<defs>
+<marker id="config-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="config-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="config-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="config-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="856" y="300" width="336" height="160" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+<rect x="856" y="300" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+<text x="876" y="312" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.12em">LOOP</text>
+<text x="868" y="330" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.04em">[every few seconds]</text>
+<line x1="128" y1="88" x2="128" y2="484" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="384" y1="88" x2="384" y2="484" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="640" y1="88" x2="640" y2="484" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="896" y1="88" x2="896" y2="484" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="1152" y1="88" x2="1152" y2="484" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<rect x="380" y="132" width="8" height="148" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="636" y="164" width="8" height="76" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1148" y="340" width="8" height="104" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<line x1="128" y1="132" x2="380" y2="132" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#config-arrow)"/><rect x="217.5" y="111" width="73.0" height="14" rx="2" fill="#f5f5f5"/><text x="254.0" y="121.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">APPLY YAML</text>
+<line x1="388" y1="164" x2="636" y2="164" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#config-arrow-link)"/><rect x="482.0" y="143" width="60.0" height="14" rx="2" fill="#f5f5f5"/><text x="512.0" y="153.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">PUSH API</text>
+<line x1="644" y1="196" x2="896" y2="196" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#config-arrow)"/><rect x="753.0" y="175" width="34.0" height="14" rx="2" fill="#f5f5f5"/><text x="770.0" y="185.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">SAVE</text>
+<line x1="636" y1="228" x2="388" y2="228" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#config-arrow)"/><rect x="501.5" y="207" width="21.0" height="14" rx="2" fill="#f5f5f5"/><text x="512.0" y="217.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">OK</text>
+<line x1="380" y1="268" x2="128" y2="268" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#config-arrow)"/><rect x="220.75" y="247" width="66.5" height="14" rx="2" fill="#f5f5f5"/><text x="254.0" y="257.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">COMPLETED</text>
+<line x1="1148" y1="356" x2="896" y2="356" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#config-arrow-link)"/><rect x="988.75" y="335" width="66.5" height="14" rx="2" fill="#f5f5f5"/><text x="1022.0" y="345.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">READ APIS</text>
+<line x1="896" y1="388" x2="1148" y2="388" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#config-arrow-accent)"/><rect x="992.0" y="367" width="60.0" height="14" rx="2" fill="#f5f5f5"/><text x="1022.0" y="377.5" fill="#bf4520" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">PING API</text>
+<path d="M 1156,412 H 1180 Q 1188,412 1188,420 V 428 Q 1188,436 1180,436 H 1156" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#config-arrow)"/><rect x="1196" y="416" width="73.0" height="14" rx="2" fill="#f5f5f5"/><text x="1200" y="427" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">LOAD /PING</text>
+<rect x="48" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="48" y="32" width="160" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="56" y="38" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="70.5" y="47.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">YOU</text>
+<text x="128.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">You</text>
+<text x="128.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">kubectl apply</text>
+<rect x="304" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="304" y="32" width="160" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="312" y="38" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="326.5" y="47.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GKO</text>
+<text x="384.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Operator</text>
+<text x="384.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">reads the CRD</text>
+<rect x="560" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="560" y="32" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="568" y="38" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="582.5" y="47.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="640.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Management API</text>
+<text x="640.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">:8083</text>
+<rect x="816" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="816" y="32" width="160" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<rect x="824" y="38" width="24" height="13" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+<text x="836.0" y="47.5" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<text x="896.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB</text>
+<text x="896.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">:27017</text>
+<rect x="1072" y="32" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1072" y="32" width="160" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="1080" y="38" width="24" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="1092.0" y="47.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<text x="1152.0" y="64.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway × 2</text>
+<text x="1152.0" y="80.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">:8082</text>
+<line x1="24" y1="508" x2="1256" y2="508" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="528" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<line x1="100" y1="525" x2="116" y2="525" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#config-arrow-link)"/>
+<text x="122" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">HTTP or database call</text>
+<line x1="300.4" y1="525" x2="316.4" y2="525" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#config-arrow)"/>
+<text x="322.4" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Answer</text>
+<line x1="404.79999999999995" y1="525" x2="420.79999999999995" y2="525" stroke="#bf4520" stroke-width="1.2" marker-end="url(#config-arrow-accent)"/>
+<text x="426.79999999999995" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">The API reaches the gateway</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>Key points</h3></div><ul>
+<li><code>syncFrom: MANAGEMENT</code> puts the API in MongoDB, so it also shows in the Console.</li>
+<li>The operator writes <code>processingStatus: Completed</code>, and <code>up.sh</code> waits for it.</li>
+<li>If it fails, <code>up.sh</code> prints the operator's own error message.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>If MongoDB stops</h3></div><ul>
+<li>Gateways keep serving the APIs they already loaded.</li>
+<li>New or changed APIs do not arrive.</li>
+<li>Sync errors show in the gateway logs.</li>
+</ul></div>
+</div>
+</section><section id="make-up">
+<p class="eyebrow">04 · One command up</p>
+<h2>What make up does, in order</h2>
+<p class="lead">Every step waits for the one before it. Each step either installs with <code>helm upgrade --install</code>, applies a file, or creates a secret only if it is missing. That is what makes the script safe to run twice.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 296" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="make-up-title make-up-desc" style="min-width:1280px">
+<title id="make-up-title">What make up does, in order</title>
+<desc id="make-up-desc">Process of scripts/up.sh in nine steps from preflight checks to the final curl, each step waiting for the one before it.</desc>
+<defs>
+<marker id="make-up-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="make-up-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="make-up-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="make-up-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<line x1="140" y1="100" x2="160" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="280" y1="100" x2="300" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="420" y1="100" x2="440" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="560" y1="100" x2="580" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="700" y1="100" x2="720" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="840" y1="100" x2="860" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="980" y1="100" x2="1000" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<line x1="1120" y1="100" x2="1140" y2="100" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#make-up-arrow)"/>
+<rect x="20" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="20" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="28" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="40.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">01</text>
+<text x="80.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Preflight</text>
+<text x="80.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">tools + Docker</text>
+<text x="80.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">fails fast</text>
+<rect x="160" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="160" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="168" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="180.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">02</text>
+<text x="220.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Cluster</text>
+<text x="220.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">k3d + Traefik</text>
+<text x="220.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">port 443 free?</text>
+<rect x="300" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="300" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="308" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="320.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">03</text>
+<text x="360.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">TLS</text>
+<text x="360.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">cert-manager</text>
+<text x="360.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">issuer Ready</text>
+<rect x="440" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="440" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="448" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="460.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">04</text>
+<text x="500.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Secrets</text>
+<text x="500.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">random, stdin</text>
+<text x="500.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">only if missing</text>
+<rect x="580" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="580" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="588" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="600.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">05</text>
+<text x="640.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB</text>
+<text x="640.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">helm + netpol</text>
+<text x="640.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pods ready</text>
+<rect x="720" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="720" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="728" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="740.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">06</text>
+<text x="780.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Operator</text>
+<text x="780.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">GKO chart</text>
+<text x="780.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">CRDs exist</text>
+<rect x="860" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="860" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="868" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="880.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">07</text>
+<text x="920.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">APIM</text>
+<text x="920.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">gateway, API, UI</text>
+<text x="920.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pods ready</text>
+<rect x="1000" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="1000" y="48" width="120" height="104" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="1008" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="1020.0" y="63.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">08</text>
+<text x="1060.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">ping API</text>
+<text x="1060.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong + CRD</text>
+<text x="1060.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">webhook retry</text>
+<rect x="1140" y="48" width="120" height="104" rx="6" fill="#f5f5f5"/>
+<rect x="1140" y="48" width="120" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1148" y="54" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="1160.0" y="63.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">09</text>
+<text x="1200.0" y="96.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Verify</text>
+<text x="1200.0" y="112.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">curl /ping</text>
+<text x="1200.0" y="127.0" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">12 tries, 5 s</text>
+<text x="640" y="200" fill="#4f5d75" font-size="21" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Each step creates what is missing and leaves the rest alone, so a second run changes nothing.</text>
+<text x="640" y="226" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">FIRST RUN ABOUT 3-5 MIN · SECOND RUN ABOUT 18 S, NO POD RESTARTS</text>
+<line x1="24" y1="256" x2="1256" y2="256" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="276" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<rect x="100" y="268" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="122" y="277" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Step (second line: what it waits for)</text>
+<rect x="402.8" y="268" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<text x="424.8" y="277" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">The step that publishes /ping</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>Key points</h3></div><ul>
+<li><code>make test</code> runs <code>make up</code> again and checks that no pod restarted.</li>
+<li>Every kubectl and helm call names <code>--context k3d-gravitee</code>, so no other cluster is touched.</li>
+<li>Helm keeps its cache and config in <code>.helm/</code> inside the project.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>Two waits that matter</h3></div><ul>
+<li>The operator creates its CRDs only when it starts, so step 6 waits for them.</li>
+<li>The operator's webhook can refuse calls for a few seconds after start. Step 8 retries only that error.</li>
+</ul></div>
+</div>
+</section><section id="security">
+<p class="eyebrow">05 · Security</p>
+<h2>Who may talk to whom</h2>
+<p class="lead">Port 443 listens only on 127.0.0.1, so other machines cannot reach it. Inside the cluster, NetworkPolicies decide who may connect. <code>make test</code> proves it with two probe pods: one has the gateway labels, one does not.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="security-title security-desc" style="min-width:1280px">
+<title id="security-title">Who may talk to whom</title>
+<desc id="security-desc">Security boundaries: port 443 listens only on 127.0.0.1, Traefik terminates TLS, NetworkPolicies let only the gateway reach pong and only Gravitee pods reach MongoDB, and other pods are refused.</desc>
+<defs>
+<marker id="security-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="security-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="security-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="security-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="200" y="40" width="1056" height="440" rx="8" fill="transparent" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="6,4"/><text x="212" y="57" fill="#4f5d75" font-size="9.5" font-weight="500" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.12em">YOUR LAPTOP · PORT 443 OPEN ONLY ON 127.0.0.1</text>
+<rect x="588" y="72" width="416" height="376" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><rect x="596" y="76" width="129" height="14" rx="2" fill="#f5f5f5"/><text x="601" y="86.5" fill="#5a6580" font-size="8.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">NAMESPACE GRAVITEE</text>
+<rect x="1032" y="176" width="208" height="272" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><rect x="1040" y="180" width="102" height="14" rx="2" fill="#f5f5f5"/><text x="1045" y="190.5" fill="#5a6580" font-size="8.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">NAMESPACE PONG</text>
+<line x1="128" y1="256" x2="192" y2="256" fill="none" stroke="#2d3142" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#security-stop)"/>
+<rect x="133.25" y="235" width="53.5" height="14" rx="2" fill="#f5f5f5"/><text x="160" y="245.5" fill="#2d3142" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">BLOCKED</text>
+<line x1="352" y1="256" x2="408" y2="256" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#security-arrow-link)"/>
+<rect x="359.75" y="235" width="40.5" height="14" rx="2" fill="#f5f5f5"/><text x="380" y="245.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">HTTPS</text>
+<line x1="548" y1="256" x2="612" y2="256" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#security-arrow-link)"/>
+<rect x="563.0" y="235" width="34.0" height="14" rx="2" fill="#f5f5f5"/><text x="580" y="245.5" fill="#2e5aa8" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">HTTP</text>
+<line x1="772" y1="256" x2="820" y2="256" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#security-arrow)"/>
+<rect x="775.75" y="235" width="40.5" height="14" rx="2" fill="#f5f5f5"/><text x="796" y="245.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">27017</text>
+<path d="M 772,132 H 892 Q 900,132 900,140 V 228" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#security-arrow)"/>
+<rect x="809.25" y="111" width="53.5" height="14" rx="2" fill="#f5f5f5"/><text x="836" y="121.5" fill="#5a6580" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">ALLOWED</text>
+<path d="M 692,284 V 312 Q 692,320 700,320 H 1016 Q 1024,320 1024,312 V 264 Q 1024,256 1032,256 H 1056" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#security-arrow-accent)"/>
+<rect x="817.0" y="299" width="86.0" height="14" rx="2" fill="#f5f5f5"/><text x="860" y="309.5" fill="#bf4520" font-size="9.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.06em">ONLY GATEWAY</text>
+<line x1="1136" y1="360" x2="1136" y2="296" fill="none" stroke="#2d3142" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#security-stop)"/>
+<rect x="1144" y="320" width="47.0" height="14" rx="2" fill="#f5f5f5"/><text x="1148" y="331" fill="#2d3142" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.06em">DENIED</text>
+<rect x="16" y="228" width="112" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="16" y="228" width="112" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="24" y="234" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="38.5" y="243.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">LAN</text>
+<text x="72.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Other device</text>
+<text x="72.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">same Wi-Fi</text>
+<rect x="224" y="228" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="224" y="228" width="128" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="232" y="234" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="246.5" y="243.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">YOU</text>
+<text x="288.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">You</text>
+<text x="288.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">curl / browser</text>
+<rect x="408" y="228" width="140" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="408" y="228" width="140" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="416" y="234" width="35" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="433.5" y="243.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+<text x="478.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Traefik</text>
+<text x="478.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">TLS, local CA</text>
+<rect x="612" y="104" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="612" y="104" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="620" y="110" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="634.5" y="119.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="692.0" y="136.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Management API</text>
+<text x="692.0" y="152.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">admin login</text>
+<rect x="612" y="228" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="612" y="228" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="620" y="234" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="632.0" y="243.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<text x="692.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway × 2</text>
+<text x="692.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">has gateway label</text>
+<rect x="820" y="228" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="820" y="228" width="160" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<rect x="828" y="234" width="24" height="13" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+<text x="840.0" y="243.5" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<text x="900.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB</text>
+<text x="900.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">password in Secret</text>
+<rect x="1056" y="228" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1056" y="228" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1064" y="234" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="1078.5" y="243.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="1136.0" y="260.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong</text>
+<text x="1136.0" y="276.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">:8080</text>
+<rect x="1056" y="360" width="160" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1056" y="360" width="160" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="1064" y="366" width="29" height="13" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+<text x="1078.5" y="375.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">POD</text>
+<text x="1136.0" y="392.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Other pod</text>
+<text x="1136.0" y="408.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">no gateway label</text>
+<line x1="24" y1="508" x2="1256" y2="508" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="528" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<rect x="100" y="520" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<text x="122" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">TLS gate</text>
+<rect x="217.2" y="520" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="239.2" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Not allowed in</text>
+<line x1="372.8" y1="525" x2="388.8" y2="525" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#security-arrow-link)"/>
+<text x="394.8" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Encrypted, then routed</text>
+<line x1="579.6" y1="525" x2="595.6" y2="525" stroke="#bf4520" stroke-width="1.2" marker-end="url(#security-arrow-accent)"/>
+<text x="601.6" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Only route to pong</text>
+<line x1="760.8" y1="525" x2="776.8" y2="525" stroke="#2d3142" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#security-stop)"/>
+<text x="782.8" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Blocked</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr 0.85fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>Key points</h3></div><ul>
+<li>Only the gateway may call pong, so nobody can bypass it.</li>
+<li>Only Gravitee pods may reach MongoDB on 27017.</li>
+<li>The MongoDB password and the token key are generated on the first run and never touch git.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>Also hardened</h3></div><ul>
+<li>Every pod runs as non-root with all capabilities dropped.</li>
+<li>The chart's sample users are removed.</li>
+<li>The chart's public token signing key is replaced with a random one.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot muted"></span><h3>Honest gap</h3></div><ul>
+<li>Console login is still <code>admin/admin</code>, the chart default.</li>
+<li>It is item 1 on the production list.</li>
+</ul></div>
+</div>
+</section><section id="production">
+<p class="eyebrow">06 · Before production</p>
+<h2>Today versus production</h2>
+<p class="lead">The demo uses production settings where they fit on one laptop. These four changes and two additions are what a real environment still needs. Each number in the CHANGES list matches the same number on a box or a line in the right panel.</p>
+<div class="diagram-container">
+<svg viewBox="0 0 1280 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="production-title production-desc" style="min-width:1280px" data-diagram="architecture-delta">
+<title id="production-title">Today versus production</title>
+<desc id="production-desc">Before and after comparison with numbered changes: today&#x27;s single-node demo against the production target with Let&#x27;s Encrypt, autoscaled gateways, SSO on the Management API, a MongoDB replica set, Prometheus and Elasticsearch.</desc>
+<defs>
+<marker id="production-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="production-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+<marker id="production-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+<marker id="production-stop" markerWidth="4" markerHeight="12" refX="2" refY="6" orient="auto"><rect x="1" y="0" width="2" height="12" fill="#2d3142"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<text x="40" y="64" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">TODAY · THIS REPOSITORY</text>
+<text x="824" y="64" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">BEFORE PRODUCTION</text>
+<rect x="24" y="72" width="448" height="384" rx="8" fill="transparent" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<rect x="808" y="72" width="448" height="384" rx="8" fill="transparent" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<g data-snapshot="before" data-grid="448 384 4" transform="translate(24 72)">
+<path data-kind="relationship" data-object-id="traefik-gateway" data-status="unchanged" data-signature="traefik-gateway" data-from="traefik" data-to="gateway" d="M 144,68 H 168" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="gateway-pong" data-status="unchanged" data-signature="gateway-pong" data-from="gateway" data-to="pong" d="M 296,68 H 320" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="management-mongodb" data-status="unchanged" data-signature="management-mongodb" data-from="management" data-to="mongodb" d="M 144,332 H 168" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="gateway-mongodb" data-status="unchanged" data-signature="gateway-mongodb" data-from="gateway" data-to="mongodb" d="M 232,96 V 304" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="traefik-management" data-status="unchanged" data-signature="traefik-management" data-from="traefik" data-to="management" d="M 144,84 H 148 Q 156,84 156,92 V 272 Q 156,280 148,280 H 108 Q 100,280 100,288 V 304" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="operator-management" data-status="unchanged" data-signature="operator-management" data-from="operator" data-to="management" d="M 384,360 V 368 Q 384,376 376,376 H 88 Q 80,376 80,368 V 360" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<g data-kind="component" data-object-id="traefik" data-status="changed" data-signature="issuer=local-ca">
+<rect x="16" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="16" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="24" y="46" width="35" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="41.5" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+<text x="80.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Traefik</text>
+<text x="80.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">local CA</text>
+</g>
+<g data-kind="component" data-object-id="gateway" data-status="changed" data-signature="scale=2;nodes=1">
+<rect x="168" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="168" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="176" y="46" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="188.0" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<text x="232.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway</text>
+<text x="232.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">2 pods · 1 node</text>
+</g>
+<g data-kind="component" data-object-id="pong" data-status="unchanged" data-signature="nginx-x2">
+<rect x="320" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="320" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="328" y="46" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="342.5" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="384.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong</text>
+<text x="384.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">nginx × 2</text>
+</g>
+<g data-kind="component" data-object-id="operator" data-status="unchanged" data-signature="gko">
+<rect x="320" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="320" y="304" width="128" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="328" y="310" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="342.5" y="319.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GKO</text>
+<text x="384.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Operator</text>
+<text x="384.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pushes APIs</text>
+</g>
+<g data-kind="component" data-object-id="management" data-status="changed" data-signature="login=admin">
+<rect x="16" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="16" y="304" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="24" y="310" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="38.5" y="319.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="80.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Management API</text>
+<text x="80.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">admin / admin</text>
+</g>
+<g data-kind="component" data-object-id="mongodb" data-status="changed" data-signature="standalone">
+<rect x="168" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="168" y="304" width="128" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<rect x="176" y="310" width="24" height="13" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+<text x="188.0" y="319.5" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<text x="232.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB</text>
+<text x="232.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">standalone</text>
+</g>
+</g>
+<text x="512" y="64" fill="#4f5d75" font-size="9.5" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">CHANGES</text>
+<line x1="512" y1="72" x2="768" y2="72" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<circle cx="519" cy="96" r="7" fill="#2d3142"/><text x="519" y="99" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">1</text>
+<g data-ledger-entry="0"><text x="532" y="100" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">CHANGED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">Traefik</tspan></text><text x="532" y="118" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">local CA → Let&#x27;s Encrypt, real DNS name</text></g>
+<circle cx="519" cy="140" r="7" fill="#2d3142"/><text x="519" y="143" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">2</text>
+<g data-ledger-entry="1"><text x="532" y="144" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">CHANGED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">Gateway</tspan></text><text x="532" y="162" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">2 pods on 1 node → autoscaled on 3 nodes</text></g>
+<circle cx="519" cy="184" r="7" fill="#2d3142"/><text x="519" y="187" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">3</text>
+<g data-ledger-entry="2"><text x="532" y="188" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">CHANGED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">Management API</tspan></text><text x="532" y="206" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">admin/admin → SSO, internal only</text></g>
+<circle cx="519" cy="228" r="7" fill="#2d3142"/><text x="519" y="231" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">4</text>
+<g data-ledger-entry="3"><text x="532" y="232" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">CHANGED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">MongoDB</tspan></text><text x="532" y="250" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">standalone → replica set with backups</text></g>
+<circle cx="519" cy="272" r="7" fill="#2d3142"/><text x="519" y="275" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">5</text>
+<g data-ledger-entry="4"><text x="532" y="276" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">ADDED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">Prometheus</tspan></text><text x="532" y="294" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">scrapes :18082, alerts on 5xx ratio</text></g>
+<circle cx="519" cy="316" r="7" fill="#2d3142"/><text x="519" y="319" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">6</text>
+<g data-ledger-entry="5"><text x="532" y="320" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">ADDED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">Elasticsearch</tspan></text><text x="532" y="338" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">stores request analytics</text></g>
+<circle cx="519" cy="360" r="7" fill="#2d3142"/><text x="519" y="363" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">7</text>
+<g data-ledger-entry="6"><text x="532" y="364" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">ADDED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">scrape path</tspan></text><text x="532" y="382" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">Prometheus → gateway</text></g>
+<circle cx="519" cy="404" r="7" fill="#2d3142"/><text x="519" y="407" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">8</text>
+<g data-ledger-entry="7"><text x="532" y="408" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.08em">ADDED <tspan fill="#2d3142" font-family="'Geist', system-ui, sans-serif" font-size="13" letter-spacing="0">report path</tspan></text><text x="532" y="426" fill="#4f5d75" font-size="12" font-family="'Geist', system-ui, sans-serif">gateway → Elasticsearch</text></g>
+<g data-snapshot="after" data-grid="448 384 4" transform="translate(808 72)">
+<path data-kind="relationship" data-object-id="traefik-gateway" data-status="unchanged" data-signature="traefik-gateway" data-from="traefik" data-to="gateway" d="M 144,68 H 168" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="gateway-pong" data-status="unchanged" data-signature="gateway-pong" data-from="gateway" data-to="pong" d="M 296,68 H 320" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="management-mongodb" data-status="unchanged" data-signature="management-mongodb" data-from="management" data-to="mongodb" d="M 144,332 H 168" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="gateway-mongodb" data-status="unchanged" data-signature="gateway-mongodb" data-from="gateway" data-to="mongodb" d="M 232,96 V 304" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="traefik-management" data-status="unchanged" data-signature="traefik-management" data-from="traefik" data-to="management" d="M 144,84 H 148 Q 156,84 156,92 V 272 Q 156,280 148,280 H 108 Q 100,280 100,288 V 304" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="operator-management" data-status="unchanged" data-signature="operator-management" data-from="operator" data-to="management" d="M 384,360 V 368 Q 384,376 376,376 H 88 Q 80,376 80,368 V 360" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#production-arrow)"/>
+<path data-kind="relationship" data-object-id="prometheus-gateway" data-status="added" data-signature="prometheus-gateway" data-from="prometheus" data-to="gateway" d="M 144,204 H 148 C 148,196 164,196 164,204 H 192 Q 200,204 200,196 V 96" fill="none" stroke="#2e5aa8" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#production-arrow-link)"/>
+<path data-kind="relationship" data-object-id="gateway-elasticsearch" data-status="added" data-signature="gateway-elasticsearch" data-from="gateway" data-to="elasticsearch" d="M 264,96 V 196 Q 264,204 272,204 H 320" fill="none" stroke="#2e5aa8" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#production-arrow-link)"/>
+<g data-kind="component" data-object-id="traefik" data-status="changed" data-signature="issuer=acme">
+<rect x="16" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="16" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="24" y="46" width="35" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="41.5" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+<rect x="122" y="46" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="129" y="55.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Δ</text>
+<text x="80.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Traefik</text>
+<text x="80.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Let&#x27;s Encrypt</text>
+</g>
+<g data-kind="component" data-object-id="gateway" data-status="changed" data-signature="scale=hpa;nodes=3">
+<rect x="168" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="168" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="176" y="46" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="188.0" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GW</text>
+<rect x="274" y="46" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="281" y="55.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Δ</text>
+<text x="232.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Gateway</text>
+<text x="232.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">HPA · 3 nodes</text>
+</g>
+<g data-kind="component" data-object-id="pong" data-status="unchanged" data-signature="nginx-x2">
+<rect x="320" y="40" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="320" y="40" width="128" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="328" y="46" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+<text x="342.5" y="55.5" fill="#2d3142" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="384.0" y="72.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pong</text>
+<text x="384.0" y="88.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">nginx × 2</text>
+</g>
+<g data-kind="component" data-object-id="operator" data-status="unchanged" data-signature="gko">
+<rect x="320" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="320" y="304" width="128" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="328" y="310" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="342.5" y="319.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">GKO</text>
+<text x="384.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Operator</text>
+<text x="384.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">pushes APIs</text>
+</g>
+<g data-kind="component" data-object-id="management" data-status="changed" data-signature="login=sso;internal">
+<rect x="16" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="16" y="304" width="128" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="24" y="310" width="29" height="13" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+<text x="38.5" y="319.5" fill="#bf4520" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">API</text>
+<rect x="122" y="310" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="129" y="319.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Δ</text>
+<text x="80.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Management API</text>
+<text x="80.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">SSO, internal</text>
+</g>
+<g data-kind="component" data-object-id="mongodb" data-status="changed" data-signature="replica-set;backups">
+<rect x="168" y="304" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="168" y="304" width="128" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<rect x="176" y="310" width="24" height="13" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+<text x="188.0" y="319.5" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<rect x="274" y="310" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="281" y="319.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Δ</text>
+<text x="232.0" y="336.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">MongoDB</text>
+<text x="232.0" y="352.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">replica set</text>
+</g>
+<g data-kind="component" data-object-id="prometheus" data-status="added" data-signature="prometheus">
+<rect x="16" y="176" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="16" y="176" width="128" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="24" y="182" width="29" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="38.5" y="191.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">MON</text>
+<rect x="122" y="182" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="129" y="191.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">+</text>
+<text x="80.0" y="208.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Prometheus</text>
+<text x="80.0" y="224.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">alerts on 5xx</text>
+</g>
+<g data-kind="component" data-object-id="elasticsearch" data-status="added" data-signature="elasticsearch">
+<rect x="320" y="176" width="128" height="56" rx="6" fill="#f5f5f5"/>
+<rect data-role="bounds" x="320" y="176" width="128" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<rect x="328" y="182" width="24" height="13" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<text x="340.0" y="191.5" fill="#5a6580" font-size="8" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.08em">ES</text>
+<rect x="426" y="182" width="14" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-width="0.8"/>
+<text x="433" y="191.5" fill="#2d3142" font-size="9" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">+</text>
+<text x="384.0" y="208.0" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Elasticsearch</text>
+<text x="384.0" y="224.0" fill="#4f5d75" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">analytics</text>
+</g>
+<circle cx="144" cy="40" r="7" fill="#2d3142"/><text x="144" y="43" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">1</text>
+<circle cx="296" cy="40" r="7" fill="#2d3142"/><text x="296" y="43" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">2</text>
+<circle cx="144" cy="304" r="7" fill="#2d3142"/><text x="144" y="307" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">3</text>
+<circle cx="296" cy="304" r="7" fill="#2d3142"/><text x="296" y="307" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">4</text>
+<circle cx="144" cy="176" r="7" fill="#2d3142"/><text x="144" y="179" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">5</text>
+<circle cx="320" cy="176" r="7" fill="#2d3142"/><text x="320" y="179" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">6</text>
+<circle cx="200" cy="150" r="7" fill="#2d3142"/><text x="200" y="153" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">7</text>
+<circle cx="264" cy="150" r="7" fill="#2d3142"/><text x="264" y="153" fill="#f5f5f5" font-size="8" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">8</text>
+</g>
+<text x="640" y="484" fill="#5a6580" font-size="10.5" font-family="'Geist', system-ui, sans-serif" text-anchor="middle" letter-spacing="0.04em">ALSO MISSING, NOT DRAWN: VAULT FOR SECRETS · REDIS FOR RATE LIMITS · GITOPS · CI CHECKS · READ-ONLY GRAVITEE CONTAINERS · API KEYS · CENTRAL LOGS · IN-CLUSTER TLS</text>
+<line x1="24" y1="508" x2="1256" y2="508" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="24" y="528" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif" letter-spacing="0.14em">LEGEND</text>
+<rect x="100" y="520" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="122" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Δ changed</text>
+<rect x="223.6" y="520" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<text x="245.6" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">+ added</text>
+<rect x="334.4" y="520" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<text x="356.4" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Fix this first</text>
+<line x1="490.0" y1="525" x2="506.0" y2="525" stroke="#2e5aa8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#production-arrow-link)"/>
+<text x="512.0" y="529" fill="#4f5d75" font-size="11.5" font-family="'Geist', system-ui, sans-serif">Added connection</text>
+</svg>
+</div>
+<div class="cards" style="grid-template-columns: 1.15fr 1fr">
+<div class="card"><div class="card-header"><span class="card-dot coral"></span><h3>First week in production</h3></div><ul>
+<li>Replace the default logins and put the Console behind SSO.</li>
+<li>Run MongoDB as a replica set with backups.</li>
+<li>Alert on the 5xx ratio and on sync errors.</li>
+</ul></div>
+<div class="card"><div class="card-header"><span class="card-dot ink"></span><h3>Why not now</h3></div><ul>
+<li>Changing the admin password needs a bcrypt hash and more secret wiring, which did not fit the 3 to 4 hour box.</li>
+<li>Elasticsearch is the heaviest part and was optional in the brief.</li>
+</ul></div>
+</div>
+</section>
+<section id="knowledge-base" class="knowledge">
+<p class="eyebrow">07 · Knowledge base</p>
+<h2>Everything in words</h2>
+<p class="lead">What Gravitee is, the Kubernetes terms, how each part works and why, what production still needs, the problems solved while building it, and answers to design questions and edge cases.</p>
+<nav class="toc"><a href="#what-gravitee-is">What Gravitee is</a><a href="#the-kubernetes-building-blocks-used">The Kubernetes building blocks used</a><a href="#why-these-choices-the-why-not-x-questions">Why these choices (the "why not X" questions)</a><a href="#what-is-missing-before-production">What is missing before production</a><a href="#design-questions-and-answers">Design questions and answers</a></nav>
+<article>
+<h3 id="what-gravitee-is">What Gravitee is</h3>
+<h4 id="what-an-api-is">What an API is</h4>
+<p>An API (Application Programming Interface) is a door into a program that another program can call. Here it is an HTTP address. You send <code>GET https://localhost/ping</code> and get back the text <code>pong</code>.</p>
+<h4 id="what-an-api-gateway-is">What an API gateway is</h4>
+<p>Picture a hotel reception desk. Guests never walk straight into the kitchen. They ask the reception, and the reception checks who they are, decides if they are allowed, and passes the request on.</p>
+<p>An API gateway is that reception desk for APIs. Every request goes through it first. It can:</p>
+<ul><li>check an API key or a login token (security),</li><li>limit how many calls one client makes per minute (rate limiting),</li><li>change headers or the body on the way in or out,</li><li>count requests and measure time (analytics, metrics),</li><li>send the request to the right backend (routing).</li></ul>
+<p>The backend (here <code>pong</code>) then only has to do its own job.</p>
+<h4 id="what-api-management-apim-is">What API management (APIM) is</h4>
+<p>A gateway alone is just the reception desk. API management adds the office behind it: a place to design APIs, publish them, give developers keys, and see statistics. Gravitee APIM (API Management) is an open-source product that does all of this.</p>
+<h4 id="the-parts-of-gravitee-apim">The parts of Gravitee APIM</h4>
+<div class="table-wrap"><table><thead><tr><th>Part</th><th>What it does</th><th>In this project</th></tr></thead><tbody><tr><td>Gateway</td><td>Takes every real API call and applies the rules. Written in Java.</td><td>Yes, 2 copies (<code>apim-gateway</code>)</td></tr><tr><td>Management API</td><td>The admin back end. You create and change APIs through it.</td><td>Yes (<code>apim-api</code>)</td></tr><tr><td>Console</td><td>A web page for admins. The pod only serves the files; the page runs in your browser and calls the Management API through <code>/management</code>.</td><td>Yes, at https://localhost/console</td></tr><tr><td>Developer Portal</td><td>A web page where outside developers find APIs and get keys.</td><td>Turned off, not needed</td></tr><tr><td>MongoDB</td><td>The database. Stores API definitions, users, plans.</td><td>Yes</td></tr><tr><td>Elasticsearch</td><td>Stores analytics: every request, its time and status.</td><td>Turned off, optional in the brief</td></tr></tbody></table></div>
+<p>The single most important idea: <strong>the gateway reads its APIs from MongoDB, not from the Management API.</strong> So if the Management API is down, traffic still flows.</p>
+<pre>admin -&gt; Console -&gt; Management API -&gt; MongoDB &lt;- gateway (reads every few seconds)
+                                                     ^
+client  ---------------------------------------------+ (real traffic)</pre>
+<h4 id="community-edition-ce-vs-enterprise-edition-ee">Community Edition (CE) vs Enterprise Edition (EE)</h4>
+<p>CE is free and open source. EE needs a paid license key and adds extra features. The brief asks for CE, so no license is used.</p>
+<h4 id="words-inside-a-gravitee-api-v4-definition">Words inside a Gravitee API (v4 definition)</h4>
+<p>Gravitee has an API format called "v4". Our API uses these pieces (see <code>manifests/ping-api.yaml</code>):</p>
+<div class="table-wrap"><table><thead><tr><th>Word</th><th>Meaning</th><th>Ours</th></tr></thead><tbody><tr><td>Listener / entrypoint</td><td>Where clients call in</td><td>HTTP path <code>/ping</code></td></tr><tr><td>Endpoint group / endpoint</td><td>Where the gateway sends the call</td><td>group <code>pong-backend</code>, endpoint <code>pong</code> -&gt; <code>http://pong.pong.svc.cluster.local:8080/ping</code></td></tr><tr><td>Plan</td><td>The rule for who may call the API and how they prove who they are. Gravitee needs a plan before it serves an API.</td><td><code>Keyless</code> plan: no credentials needed, so anyone can call <code>/ping</code></td></tr><tr><td>Flow</td><td>A rule that matches some requests and runs policies on them</td><td><code>GET only</code> - matches only GET</td></tr><tr><td>Policy</td><td>One action in a flow, for example rate limit</td><td>none, the flow is only a filter</td></tr></tbody></table></div>
+<h3 id="the-kubernetes-building-blocks-used">The Kubernetes building blocks used</h3>
+<p>A short glossary of the Kubernetes terms used on this page.</p>
+<div class="table-wrap"><table><thead><tr><th>Thing</th><th>One-sentence meaning</th><th>Example here</th></tr></thead><tbody><tr><td>Container</td><td>A packaged program with everything it needs</td><td><code>nginxinc/nginx-unprivileged:1.30.6-alpine</code></td></tr><tr><td>Kubernetes</td><td>Software that runs containers on machines and keeps them alive</td><td>the cluster</td></tr><tr><td>k3s</td><td>A small Kubernetes made by Rancher, one binary</td><td><code>rancher/k3s:v1.35.9-k3s1</code></td></tr><tr><td>k3d</td><td>A tool that runs k3s inside Docker containers</td><td><code>k3d cluster create --config k3d.yaml</code></td></tr><tr><td>Namespace</td><td>A folder inside the cluster</td><td><code>gravitee</code>, <code>pong</code>, <code>cert-manager</code></td></tr><tr><td>Pod</td><td>One or more containers running together</td><td><code>pong-7c9...</code></td></tr><tr><td>Deployment</td><td>"Keep N copies of this pod running"</td><td><code>pong</code> with <code>replicas: 2</code></td></tr><tr><td>Service</td><td>A stable name and address in front of pods</td><td><code>pong.pong.svc</code> port 8080</td></tr><tr><td>Ingress</td><td>A rule "requests for this path go to this Service"</td><td><code>/</code> -&gt; gateway, <code>/console</code> -&gt; Console</td></tr><tr><td>Ingress controller</td><td>The program that obeys Ingress rules and holds port 443</td><td>Traefik</td></tr><tr><td>ConfigMap / Secret</td><td>Settings / secret settings stored in the cluster</td><td><code>pong-nginx</code> / <code>mongodb-credentials</code></td></tr><tr><td>Helm chart</td><td>A package of Kubernetes files with settings you can change</td><td><code>apim</code>, <code>gko</code>, <code>cert-manager</code>, <code>mongodb</code></td></tr><tr><td>Helm values</td><td>Your settings for a chart</td><td><code>values/apim.yaml</code></td></tr><tr><td>CRD</td><td>Custom Resource Definition: teaches Kubernetes a new kind of object</td><td><code>ApiV4Definition</code></td></tr><tr><td>Operator</td><td>A controller program, running as a pod in the cluster. It watches one kind of object, a custom resource such as <code>ApiV4Definition</code> (a new object type the cluster learns from a CRD). For each object it compares what the object asks for with what exists in Gravitee, and makes the Gravitee side match. It repeats this on every change and on a timer, so it can fix drift.</td><td>GKO (Gravitee Kubernetes Operator), pod <code>gko-controller-manager</code></td></tr><tr><td>NetworkPolicy</td><td>A firewall rule between pods</td><td>only the gateway may call <code>pong</code></td></tr><tr><td>PodDisruptionBudget (PDB)</td><td>"During planned maintenance, keep at least N pods up"</td><td><code>minAvailable: 1</code></td></tr><tr><td>cert-manager</td><td>An operator that creates and renews TLS certificates</td><td><code>localhost-tls</code></td></tr></tbody></table></div>
+<p>"Context" in <code>kubectl --context k3d-gravitee</code> means "which cluster to talk to". A workstation often knows several clusters. Naming the context in every command means the scripts never touch another cluster by accident.</p>
+<h3 id="why-these-choices-the-why-not-x-questions">Why these choices (the "why not X" questions)</h3>
+<div class="table-wrap"><table><thead><tr><th>Choice</th><th>Alternatives</th><th>Short answer</th></tr></thead><tbody><tr><td>Full APIM + operator</td><td>DB-less gateway; REST script</td><td>Brief says "deploy APIM". DB-less has no Console or Management API. A REST script is imperative: on the second run it must handle "already exists" by itself.</td></tr><tr><td>k3d</td><td>kind, minikube, Docker Desktop Kubernetes</td><td>Starts fast. One line maps port 443. Ships Traefik, a load balancer and a NetworkPolicy controller. kind has no NetworkPolicy enforcement by default; minikube needs <code>minikube tunnel</code> in a second terminal.</td></tr><tr><td>Traefik</td><td>ingress-nginx; gateway does TLS itself</td><td>Already inside k3s. ingress-nginx is archived (maintenance ended March 2026). One entrypoint for the Console and the gateway.</td></tr><tr><td>Paths on <code>localhost</code></td><td><code>api.localhost</code>, <code>console.localhost</code></td><td><code>*.localhost</code> does not resolve in Safari or the macOS resolver.</td></tr><tr><td>cert-manager + local CA</td><td>mkcert; a certificate file in git</td><td>Auto-renewal was asked for. In production only the issuer changes, to Let's Encrypt (ACME).</td></tr><tr><td>Makefile + POSIX sh</td><td>helmfile, Terraform, Flux/Argo CD</td><td>No extra tool. The operator creates CRDs at runtime, so steps must wait for each other, which a script shows clearly. macOS ships bash 3.2, so plain <code>sh</code> is the portable choice.</td></tr><tr><td>MongoDB 8.0</td><td>PostgreSQL (JDBC); replica set</td><td>Gravitee's default database, no driver plugin. 8.0 is the newest version Gravitee 4.12 tests. The chart default 9.x is not tested.</td></tr><tr><td>nginx-unprivileged + ConfigMap</td><td>Own app image</td><td>Nothing to build or push. Runs as non-root. <code>return 200 'pong'</code> has no trailing newline.</td></tr><tr><td>cloudpirates MongoDB chart</td><td>Bitnami</td><td>Gravitee's own install docs use it since Bitnami images went behind a paywall.</td></tr></tbody></table></div>
+<h3 id="what-is-missing-before-production">What is missing before production</h3>
+<ol><li>Default logins <code>admin/admin</code> (Console) and <code>admin/adminadmin</code> (gateway technical API). Change them and use a secret manager like Vault.</li><li>Console behind SSO, on an internal address, separate from public API traffic. The gateway technical port 18082 open only to the monitoring namespace.</li><li>MongoDB replica set with backups and its own application user (today Gravitee uses the root user), or a managed service.</li><li>Several nodes, anti-affinity (copies of a pod placed on different nodes), and a HorizontalPodAutoscaler (adds gateway pods when CPU use is high).</li><li>Analytics (Elasticsearch), Redis for rate limiting, Prometheus + Grafana + alerts.</li><li>CI that renders the charts with <code>helm template</code> and checks them with <code>kubeconform</code> (a Kubernetes schema validator), and images pinned by digest (the exact image content, not a tag that can move).</li><li>Read-only root filesystem for the Gravitee containers. They write logs and temp files, so each needs small writable volumes for those folders.</li><li>Real DNS name + Let's Encrypt, through cert-manager's ACME issuer (the protocol Let's Encrypt uses to check you own the name).</li><li>GitOps (Flux or Argo CD: a controller in the cluster applies whatever is in git) instead of re-running a script.</li><li>Credentials on the plan (an API key, or a JWT login token), and a rate-limit policy. Without them, anyone can call the API as often as they like. That is fine for <code>/ping</code>, but not for a real API.</li><li>Scheduled, tested backups. <code>make backup</code> exists, but someone has to run it.</li><li>Logs shipped to a central store, for example Loki. Today they stay in the pods.</li><li>TLS inside the cluster. Traffic from Traefik to the gateway and from the gateway to <code>pong</code> is plain HTTP.</li></ol>
+<p><code>admin/admin</code> is the chart default. It is item 1 on this list, and the stack listens only on 127.0.0.1. Changing it needs a bcrypt hash (the one-way password format Gravitee stores) and more secret wiring, which did not fit the 3 to 4 hour time box.</p>
+<h4 id="monitoring">Monitoring</h4>
+<p>The gateway has a Prometheus endpoint on port 18082 (<code>/_node/metrics/prometheus</code>). Watch:</p>
+<ul><li>error ratio: <code>http_server_requests_total{code=~"5.."}</code> vs all requests,</li><li>latency: <code>http_server_response_time_seconds</code> (sum, count, max; no percentiles without histogram buckets),</li><li>load: <code>http_server_active_requests</code>,</li><li>Java memory: <code>jvm_memory_used_bytes</code> vs the 512 MB heap, and <code>jvm_gc_pause_seconds</code>,</li><li>pod restarts and certificate expiry.</li></ul>
+<p>A Prometheus Operator <code>ServiceMonitor</code> with <code>basicAuth</code> would scrape the endpoint, because the technical port asks for a login. Per-API numbers and errors such as a lost MongoDB connection are not in these metrics. They come from the analytics reporter and the gateway logs, which this setup does not ship anywhere.</p>
+<h4 id="upgrading">Upgrading</h4>
+<p>Versions are pinned in three places: the chart versions at the top of <code>scripts/up.sh</code>, the image tags in <code>values/</code>, and the k3s image in <code>k3d.yaml</code>. The operator and APIM share version lines, so <code>GKO_VERSION</code> and <code>APIM_VERSION</code> move to a new minor together.</p>
+<ol><li>Read the release notes for every version that changes.</li><li>Back up MongoDB with <code>make backup</code>. It writes a <code>mongodump</code> archive to <code>backups/</code>.</li><li>Change the versions, then run <code>make up</code> and <code>make test</code>. Charts upgrade in place. A new k3s image only applies to a new cluster, so it needs <code>make down</code> first.</li><li>Roll back a chart with <code>helm rollback &lt;release&gt; --kube-context k3d-gravitee -n &lt;namespace&gt;</code>. If the new APIM version changed the database, restore the backup too.</li></ol>
+<h3 id="design-questions-and-answers">Design questions and answers</h3>
+<h4 id="gravitee-basics">Gravitee basics</h4>
+<p class="question"><strong>What does the gateway do on each request here?</strong></p>
+<p>Finds the API by path <code>/ping</code>, checks the plan (no credentials needed), checks the flow (GET only), forwards to <code>pong</code>, returns the answer.</p>
+<p class="question"><strong>Why does the API need a plan if it is open?</strong></p>
+<p>Gravitee only serves an API that has a published plan. The plan is the rule that says how callers prove who they are. Here the plan is named <code>Keyless</code>: it asks for nothing, so anyone can call <code>/ping</code>. A real API would use a plan that asks for an API key or a token.</p>
+<p class="question"><strong>Management API down: what happens?</strong></p>
+<p><code>/ping</code> keeps working. The gateway reads MongoDB, not the Management API. You just cannot change APIs until it is back.</p>
+<p class="question"><strong>MongoDB down?</strong></p>
+<p>The gateway keeps serving the APIs already in memory. New or changed APIs do not arrive. Sync errors show in the gateway logs.</p>
+<p class="question"><strong>Why 2 gateways but 1 Management API?</strong></p>
+<p>The gateway carries client traffic, the Management API does not. 2 gateways + PDB keep <code>/ping</code> up during a rolling update.</p>
+<p class="question"><strong>Does the Console talk to MongoDB?</strong></p>
+<p>No. The Console pod is a small web server that only hands out HTML, JavaScript and CSS. The page runs in your browser, and your browser calls <code>https://localhost/management/...</code>. That request goes through Traefik to the Management API, and only the Management API talks to MongoDB.</p>
+<p class="question"><strong>Do more gateways need to talk to each other?</strong></p>
+<p>No. Each one reads MongoDB on its own.</p>
+<p class="question"><strong>What does <code>/ping/extra</code> do? <code>/pingx</code>?</strong></p>
+<p><code>/ping/extra</code> matches <code>/ping</code> and the rest is appended, so pong gets <code>/ping/extra</code> and returns its own 404. <code>/pingx</code> matches no API and the gateway returns 404.</p>
+<h4 id="kubernetes-and-the-setup">Kubernetes and the setup</h4>
+<p class="question"><strong>Why the operator and not a REST call?</strong></p>
+<p>The API becomes a Kubernetes file: versioned in git, reviewed, re-applied safely. A script must handle "already exists" and needs the admin password at runtime.</p>
+<p class="question"><strong>What does idempotent mean, and how did you prove it?</strong></p>
+<p>Running twice gives the same state. <code>make test</code> runs <code>make up</code> again and checks no pod restarted. Re-run takes about 18 s.</p>
+<p class="question"><strong>Each re-run adds a Helm revision. Is that really "no change"?</strong></p>
+<p>A new revision with the same manifests changes no pod. Measured: no restarts. GitOps would avoid the extra revisions, that is item 9.</p>
+<p class="question"><strong>What if my kubectl points at production?</strong></p>
+<p>Every command names <code>--context k3d-gravitee</code>. The current context is never used.</p>
+<p class="question"><strong>Why a PDB on a single node?</strong></p>
+<p>A PDB protects against planned evictions such as a rolling update or a node drain, even on one node. On a real cluster the same file spreads across nodes.</p>
+<p class="question"><strong>Why Traefik in front of a gateway? Is that not two proxies?</strong></p>
+<p>Traefik owns TLS and routing for everything in the cluster, including the Console. The gateway owns API rules. The gateway could do TLS itself, but then the Console would need a second door.</p>
+<p class="question"><strong>You chose Traefik over nginx, but you use nginx anyway?</strong></p>
+<p>They do different jobs at opposite ends of the request: <code>curl -&gt; Traefik (the door) -&gt; gateway (the API rules) -&gt; nginx (the backend)</code>. What is archived is ingress-nginx, an ingress controller. The nginx web server itself is maintained, and here it is only a 6-line backend that returns <code>pong</code>.</p>
+<p class="question"><strong>How does certificate renewal work?</strong></p>
+<p>cert-manager makes a new certificate 8 hours before the 24-hour one expires and updates the Secret. Traefik watches the Secret and serves the new one without a restart. Demo: delete Secret <code>localhost-tls</code>, cert-manager recreates it, <code>make ping</code> still passes.</p>
+<p class="question"><strong>Why not Let's Encrypt, so nobody needs <code>--cacert</code>?</strong></p>
+<p>Let's Encrypt only signs names on the public internet, and <code>localhost</code> is not one. It also has to check that you control the name. The HTTP check needs the machine reachable from the internet on port 80. The DNS check needs a domain you own and an API token for its DNS provider. Each reviewer runs <code>make up</code> on their own laptop without that token, so one command up would break. The local CA renews certificates the same way, and production only swaps the issuer for Let's Encrypt.</p>
+<p class="question"><strong>Could the configuration be smaller?</strong></p>
+<p>Yes, for a plain dev setup: one gateway, no TLS, no probes, no security settings, no resource limits. But the brief grades production-grade configuration, and each of those lines is one of its signals. Two gateways with a PodDisruptionBudget keep <code>/ping</code> up during an update. The HTTP readiness probe stops traffic before the Management API is ready, which the chart's port check does not. Resource limits prove the stack fits the 4 CPU / 6 GB budget. Everything else is already off: analytics, Developer Portal, SMTP, autoscaling, sample users.</p>
+<p class="question"><strong>How does the MongoDB password travel?</strong></p>
+<p><code>openssl rand -hex 32</code> piped into <code>kubectl create secret --from-file=password=/dev/stdin</code>, only if missing. Hex keeps the URI valid, stdin keeps it out of process lists.</p>
+<p class="question"><strong>Why <code>mongo.auth.enabled: false</code> when MongoDB has a password?</strong></p>
+<p>That flag only controls what the chart writes into its ConfigMap. The real URI with the password arrives from a Secret through the variable <code>gravitee_management_mongodb_uri</code>, so the password is never in a ConfigMap.</p>
+<p class="question"><strong>Why is the heap 512 MB in a 1 GiB container?</strong></p>
+<p>Java needs memory outside the heap too: threads, class data, network buffers. The image sets 256 MB unless <code>GIO_MIN_MEM</code> and <code>GIO_MAX_MEM</code> are set. Min equals max so the heap never resizes.</p>
+<p class="question"><strong>Why POSIX <code>sh</code> and not bash?</strong></p>
+<p>macOS ships bash 3.2 and Ubuntu uses <code>dash</code> for <code>/bin/sh</code>. Plain <code>sh</code> runs the same on both. Checked with <code>shellcheck -s sh</code>, tested in Ubuntu 24.04.</p>
+<p class="question"><strong>Why not Terraform or helmfile?</strong></p>
+<p>More tools to install for no gain at this size. The steps must wait for each other (the CRDs appear at runtime), and a script shows that plainly.</p>
+<h4 id="edge-cases">Edge cases</h4>
+<p>The first six were measured with <code>curl</code> on the running stack. The last three are checks inside <code>scripts/up.sh</code>.</p>
+<p class="question"><strong><code>GET /ping/</code> with a trailing slash?</strong></p>
+<p>404 from nginx. The gateway forwards <code>/ping/</code> to <code>pong</code>, and nginx only answers the exact path <code>/ping</code>.</p>
+<p class="question"><strong><code>GET /ping?x=1</code>?</strong></p>
+<p>200 and <code>pong</code>. The query string does not change which API or flow matches.</p>
+<p class="question"><strong><code>HEAD /ping</code> or <code>OPTIONS /ping</code>?</strong></p>
+<p>404 from the gateway. The flow matches only GET, and HEAD is a separate method. A load balancer health check that sends HEAD would see 404, so it should send GET.</p>
+<p class="question"><strong><code>GET /PING</code>?</strong></p>
+<p>404 from the gateway: "No context-path matches the request URI". Paths are case-sensitive.</p>
+<p class="question"><strong><code>http://localhost/ping</code> (no TLS)?</strong></p>
+<p>Connection refused. Only port 443 is mapped from the host, so plain HTTP never reaches the cluster.</p>
+<p class="question"><strong><code>https://127.0.0.1/ping</code>?</strong></p>
+<p>TLS error (curl exit code 60). The certificate is issued for the name <code>localhost</code>, not for the IP address.</p>
+<p class="question"><strong>Port 443 is already taken on the host?</strong></p>
+<p><code>make up</code> stops before creating the cluster and says so. It checks with <code>curl</code>: exit code 7 means "connection refused", so the port is free.</p>
+<p class="question"><strong>Docker is not running?</strong></p>
+<p><code>make up</code> stops in its first step with a clear message, before it changes anything.</p>
+<p class="question"><strong>The Management API is not reachable for a few seconds right after install?</strong></p>
+<p><code>make up</code> retries applying the API. The operator checks every API with a dry-run call to the Management API, and that call can be refused for a moment after Helm reports the pod ready. Only this error and the operator's own webhook error are retried, 10 times, 5 s apart. Any other error stops at once.</p>
+<h4 id="trade-offs-and-limits">Trade-offs and limits</h4>
+<p class="question"><strong>You call it production-grade but it has <code>admin/admin</code>.</strong></p>
+<p>Agreed, it is the biggest gap, and it is item 1 on the production list. Everything else on the production list is in place, and the stack listens only on 127.0.0.1. With more time I would put bcrypt hashes in a Secret, or put the Console behind SSO.</p>
+<p class="question"><strong>There is a password in git (<code>apim-admin-credentials</code>).</strong></p>
+<p>It is the chart's public default, not a secret I made up. The operator needs it to talk to the Management API. In production it would come from Vault through External Secrets (an operator that copies secrets from a vault into Kubernetes Secrets).</p>
+<p class="question"><strong>What happens if two people run <code>make up</code> at the same time?</strong></p>
+<p>It is not guarded. Helm would refuse the second upgrade with "another operation is in progress". On one laptop it does not happen, and in a team it is a reason to move to GitOps.</p>
+<p class="question"><strong>How would you scale this to a lot of traffic?</strong></p>
+<p>More gateway replicas with an autoscaler on CPU, several nodes, Redis for rate-limit counters instead of MongoDB, and an asynchronous analytics reporter.</p>
+<p class="question"><strong>Gravitee 4.13 is out. Why are you on 4.12?</strong></p>
+<p>Gravitee releases the operator (GKO) in the same version lines as APIM: GKO 4.12 goes with APIM 4.12. GKO has a 4.13 branch on GitHub but no 4.13 release yet, so APIM 4.13 with GKO 4.12 would be a pair nobody tested. The stack takes the newest 4.12 patch, 4.12.25, and moves to 4.13 when GKO 4.13 ships. Patch releases only fix bugs and security issues, so they are safe to take at once.</p>
+<p class="question"><strong>How would you upgrade Gravitee 4.12 to 4.13?</strong></p>
+<p>Read the upgrade notes, run <code>make backup</code> (a <code>mongodump</code> archive in <code>backups/</code>), change <code>APIM_VERSION</code>, <code>GKO_VERSION</code> and the image tags in <code>values/apim.yaml</code>, run <code>make up</code> and <code>make test</code> on a test cluster, then production. Rollback: <code>helm rollback</code> plus the database backup if the schema changed.</p>
+<p class="question"><strong>How would you add a second API?</strong></p>
+<p>Copy <code>ping-api.yaml</code>, change name, path and target, <code>kubectl apply</code>. The operator publishes it, the gateways load it within seconds.</p>
+<p class="question"><strong><code>/ping</code> returns 404. How do you debug?</strong></p>
+<ol><li><code>kubectl --context k3d-gravitee -n gravitee get apiv4definition ping</code> - is it Completed?</li><li>Gateway logs: <code>kubectl --context k3d-gravitee -n gravitee logs deploy/apim-gateway</code> - did it load the API?</li><li><code>curl -v</code> - is the 404 from Traefik (no route) or from the gateway (no API or no flow)?</li><li>Call pong from inside the cluster with the gateway labels, like <code>make test</code> does.</li></ol>
+<p class="question"><strong>Why one node, not three?</strong></p>
+<p>A laptop demo. The settings (replicas, PDB, NetworkPolicies) are the same as on a real cluster; only anti-affinity is missing (item 4).</p>
+</article>
+</section>
+<footer><span>gravitee-ping · Kamil Lelonek · October 2026</span><span>source: github.com/KamilLelonek/gravitee-ping (private, access on request)</span></footer>
+</div>
+</body>
+</html>
